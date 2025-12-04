@@ -52,23 +52,3 @@ func Gzip() gin.HandlerFunc {
 		c.Next()
 	}
 }
-
-// Helper function to check if content should be compressed
-func shouldCompress(contentType string) bool {
-	compressibleTypes := []string{
-		"application/json",
-		"application/xml",
-		"text/html",
-		"text/plain",
-		"text/css",
-		"text/javascript",
-		"application/javascript",
-	}
-
-	for _, t := range compressibleTypes {
-		if strings.Contains(contentType, t) {
-			return true
-		}
-	}
-	return false
-}

@@ -38,11 +38,9 @@ func AuditLogger(logger *zap.Logger) gin.HandlerFunc {
 		duration := time.Since(start)
 
 		event := AuditEvent{
-			Timestamp:  start,
 			Method:     c.Request.Method,
 			Path:       c.Request.URL.Path,
 			IPAddress:  c.ClientIP(),
-			UserAgent:  c.Request.UserAgent(),
 			StatusCode: c.Writer.Status(),
 			Success:    c.Writer.Status() < 400,
 		}
