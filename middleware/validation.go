@@ -51,22 +51,28 @@ func InputValidation() gin.HandlerFunc {
 			}
 		}
 
-		// Check form data
+		// Check form data (only for form-urlencoded content type, skip for JSON)
+		contentType := c.GetHeader("Content-Type")
 		if c.Request.Method == "POST" || c.Request.Method == "PUT" || c.Request.Method == "PATCH" {
-			c.Request.ParseForm()
-			for key, values := range c.Request.PostForm {
-				for _, value := range values {
-					if isMalicious(value) {
-						c.JSON(http.StatusBadRequest, gin.H{
-							"error":   "Invalid input detected",
-							"message": "Request contains potentially malicious content",
-							"field":   key,
-						})
-						c.Abort()
-						return
+			// Only parse form data if Content-Type is form-urlencoded or multipart
+			if strings.Contains(contentType, "application/x-www-form-urlencoded") ||
+				strings.Contains(contentType, "multipart/form-data") {
+				c.Request.ParseForm()
+				for key, values := range c.Request.PostForm {
+					for _, value := range values {
+						if isMalicious(value) {
+							c.JSON(http.StatusBadRequest, gin.H{
+								"error":   "Invalid input detected",
+								"message": "Request contains potentially malicious content",
+								"field":   key,
+							})
+							c.Abort()
+							return
+						}
 					}
 				}
 			}
+			// Note: JSON body validation should happen in the handler after binding
 		}
 
 		c.Next()
