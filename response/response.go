@@ -105,3 +105,70 @@ func OK(c *gin.Context, message string, data interface{}) {
 func NoContent(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
+
+// Pagination represents pagination parameters
+type Pagination struct {
+	Page       int   `json:"page"`
+	Limit      int   `json:"limit"`
+	Total      int64 `json:"total"`
+	TotalPages int   `json:"total_pages"`
+}
+
+// NewPagination creates a new Pagination with calculated total pages
+func NewPagination(page, limit int, total int64) Pagination {
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	return Pagination{
+		Page:       page,
+		Limit:      limit,
+		Total:      total,
+		TotalPages: totalPages,
+	}
+}
+
+// SuccessWithPagination sends a successful paginated response
+func SuccessWithPagination(c *gin.Context, message string, data interface{}, pagination Pagination) {
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: message,
+		Data:    data,
+		Meta: &Meta{
+			Page:       pagination.Page,
+			Limit:      pagination.Limit,
+			TotalPages: pagination.TotalPages,
+			TotalCount: pagination.Total,
+		},
+	})
+}
+
+// Paginated is a convenience function for paginated list responses
+func Paginated(c *gin.Context, data interface{}, page, limit int, total int64) {
+	SuccessWithPagination(c, "Data retrieved successfully", data, NewPagination(page, limit, total))
+}
+
+// List sends a list response without pagination
+func List(c *gin.Context, message string, data interface{}) {
+	OK(c, message, data)
+}
+
+// Deleted sends a successful deletion response
+func Deleted(c *gin.Context, message string) {
+	OK(c, message, nil)
+}
+
+// Updated sends a successful update response
+func Updated(c *gin.Context, message string, data interface{}) {
+	OK(c, message, data)
+}
+
+// ValidationError sends a 422 Unprocessable Entity response
+func ValidationError(c *gin.Context, message string, details interface{}) {
+	Error(c, http.StatusUnprocessableEntity, "VALIDATION_ERROR", message, details)
+}
+
+// ServiceUnavailable sends a 503 Service Unavailable response
+func ServiceUnavailable(c *gin.Context, message string) {
+	Error(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", message, nil)
+}
