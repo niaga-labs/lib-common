@@ -172,3 +172,8 @@ func ValidationError(c *gin.Context, message string, details interface{}) {
 func ServiceUnavailable(c *gin.Context, message string) {
 	Error(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", message, nil)
 }
+
+// TooManyRequests sends a 429 Too Many Requests response
+func TooManyRequests(c *gin.Context, message string, details interface{}) {
+	Error(c, http.StatusTooManyRequests, "RATE_LIMIT_EXCEEDED", message, details)
+}
