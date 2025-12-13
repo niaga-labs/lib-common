@@ -24,10 +24,11 @@ type ErrorDetail struct {
 
 // Meta contains pagination and additional metadata
 type Meta struct {
-	Page       int `json:"page,omitempty"`
-	Limit      int `json:"limit,omitempty"`
-	TotalPages int `json:"total_pages,omitempty"`
+	Page       int   `json:"page,omitempty"`
+	Limit      int   `json:"limit,omitempty"`
+	TotalPages int   `json:"total_pages,omitempty"`
 	TotalCount int64 `json:"total_count,omitempty"`
+	Total      int64 `json:"total,omitempty"` // Alias for frontend compatibility
 }
 
 // Success sends a successful response
@@ -139,6 +140,7 @@ func SuccessWithPagination(c *gin.Context, message string, data interface{}, pag
 			Limit:      pagination.Limit,
 			TotalPages: pagination.TotalPages,
 			TotalCount: pagination.Total,
+			Total:      pagination.Total, // For frontend compatibility
 		},
 	})
 }
