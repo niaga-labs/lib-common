@@ -66,3 +66,40 @@ func RoleMiddleware(allowedRoles ...string) gin.HandlerFunc {
 		c.Abort()
 	}
 }
+
+// RequireAdmin is a convenience middleware that checks for admin role
+// It expects the "claims" or "role" to be set in the context by a prior auth middleware
+func RequireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// First try to get role from claims (map claims from JWT)
+		if claims, exists := c.Get("claims"); exists {
+			if claimsMap, ok := claims.(map[string]interface{}); ok {
+				if role, ok := claimsMap["role"].(string); ok && role == "admin" {
+					c.Next()
+					return
+				}
+			}
+		}
+
+		// Fallback to direct role check
+		role, exists := c.Get("role")
+		if !exists {
+			role, exists = c.Get("user_role")
+		}
+
+		if !exists {
+			response.Forbidden(c, "User role not found")
+			c.Abort()
+			return
+		}
+
+		userRole, ok := role.(string)
+		if !ok || userRole != "admin" {
+			response.Forbidden(c, "Admin access required")
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
