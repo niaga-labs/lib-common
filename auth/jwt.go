@@ -121,3 +121,9 @@ func (m *JWTManager) ExtractClaims(tokenString string) (*Claims, error) {
 
 	return claims, nil
 }
+
+// GenerateTempToken generates a short-lived temporary token (5 minutes)
+// Used for 2FA verification during login
+func (m *JWTManager) GenerateTempToken(userID uuid.UUID, email, purpose string) (string, error) {
+	return m.generateToken(userID, email, purpose, 5*time.Minute, "temp")
+}
