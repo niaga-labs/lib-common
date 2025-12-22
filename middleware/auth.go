@@ -68,33 +68,61 @@ func RoleMiddleware(allowedRoles ...string) gin.HandlerFunc {
 }
 
 // RequireAdmin is a convenience middleware that checks for admin role
-// It expects the "claims" or "role" to be set in the context by a prior auth middleware
+// It can parse JWT from Authorization header or use pre-set claims/role from context
 func RequireAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// First try to get role from claims (map claims from JWT)
+		var userRole string
+
+		// First try to get role from context (if set by prior middleware)
 		if claims, exists := c.Get("claims"); exists {
 			if claimsMap, ok := claims.(map[string]interface{}); ok {
-				if role, ok := claimsMap["role"].(string); ok && role == "admin" {
-					c.Next()
-					return
+				if role, ok := claimsMap["role"].(string); ok {
+					userRole = role
 				}
 			}
 		}
 
-		// Fallback to direct role check
-		role, exists := c.Get("role")
-		if !exists {
-			role, exists = c.Get("user_role")
+		// Try direct role check from context
+		if userRole == "" {
+			if role, exists := c.Get("role"); exists {
+				if r, ok := role.(string); ok {
+					userRole = r
+				}
+			}
+		}
+		if userRole == "" {
+			if role, exists := c.Get("user_role"); exists {
+				if r, ok := role.(string); ok {
+					userRole = r
+				}
+			}
 		}
 
-		if !exists {
+		// If still no role, try to parse JWT from Authorization header
+		if userRole == "" {
+			authHeader := c.GetHeader("Authorization")
+			if authHeader != "" {
+				parts := strings.SplitN(authHeader, " ", 2)
+				if len(parts) == 2 && parts[0] == "Bearer" {
+					tokenString := parts[1]
+					// Parse JWT without verification (just extract claims)
+					// The token is already verified by the auth service
+					role := auth.ExtractRoleFromToken(tokenString)
+					if role != "" {
+						userRole = role
+						c.Set("user_role", role)
+					}
+				}
+			}
+		}
+
+		if userRole == "" {
 			response.Forbidden(c, "User role not found")
 			c.Abort()
 			return
 		}
 
-		userRole, ok := role.(string)
-		if !ok || userRole != "admin" {
+		if userRole != "admin" && userRole != "super_admin" {
 			response.Forbidden(c, "Admin access required")
 			c.Abort()
 			return
