@@ -15,6 +15,7 @@ type RateLimiter struct {
 	mu       sync.RWMutex
 	rate     rate.Limit
 	burst    int
+	done     chan struct{} // Channel for graceful shutdown
 }
 
 // NewRateLimiter creates a new rate limiter
@@ -23,6 +24,7 @@ func NewRateLimiter(requestsPerSecond int, burst int) *RateLimiter {
 		limiters: make(map[string]*rate.Limiter),
 		rate:     rate.Limit(requestsPerSecond),
 		burst:    burst,
+		done:     make(chan struct{}),
 	}
 }
 
@@ -63,15 +65,27 @@ func (rl *RateLimiter) RateLimit() gin.HandlerFunc {
 	}
 }
 
-// CleanupLimiters removes old limiters (call periodically)
+// CleanupLimiters removes old limiters periodically
+// Call this once to start the cleanup goroutine
 func (rl *RateLimiter) CleanupLimiters() {
 	ticker := time.NewTicker(1 * time.Hour)
 	go func() {
-		for range ticker.C {
-			rl.mu.Lock()
-			// Clear all limiters (they'll be recreated as needed)
-			rl.limiters = make(map[string]*rate.Limiter)
-			rl.mu.Unlock()
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				rl.mu.Lock()
+				// Clear all limiters (they'll be recreated as needed)
+				rl.limiters = make(map[string]*rate.Limiter)
+				rl.mu.Unlock()
+			case <-rl.done:
+				return // Graceful exit
+			}
 		}
 	}()
+}
+
+// Shutdown gracefully stops the cleanup goroutine
+func (rl *RateLimiter) Shutdown() {
+	close(rl.done)
 }
