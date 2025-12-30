@@ -9,24 +9,31 @@ import (
 )
 
 // AuthMiddleware validates JWT tokens
+// Supports both cookie-based (web) and Authorization header (mobile/API) authentication
 func AuthMiddleware(jwtManager *auth.JWTManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			response.Unauthorized(c, "Authorization header required")
+		var tokenString string
+
+		// Priority 1: Cookie (more secure for web clients)
+		if cookieToken, err := c.Cookie("access_token"); err == nil && cookieToken != "" {
+			tokenString = cookieToken
+		} else {
+			// Priority 2: Authorization header (for mobile apps and API clients)
+			authHeader := c.GetHeader("Authorization")
+			if authHeader != "" {
+				parts := strings.SplitN(authHeader, " ", 2)
+				if len(parts) == 2 && parts[0] == "Bearer" {
+					tokenString = parts[1]
+				}
+			}
+		}
+
+		if tokenString == "" {
+			response.Unauthorized(c, "Authentication required")
 			c.Abort()
 			return
 		}
 
-		// Extract token from "Bearer <token>"
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			response.Unauthorized(c, "Invalid authorization header format")
-			c.Abort()
-			return
-		}
-
-		tokenString := parts[1]
 		claims, err := jwtManager.ValidateToken(tokenString)
 		if err != nil {
 			response.Unauthorized(c, "Invalid or expired token")
@@ -98,20 +105,31 @@ func RequireAdmin() gin.HandlerFunc {
 			}
 		}
 
-		// If still no role, try to parse JWT from Authorization header
+		// If still no role, try to parse JWT from cookie or Authorization header
 		if userRole == "" {
-			authHeader := c.GetHeader("Authorization")
-			if authHeader != "" {
-				parts := strings.SplitN(authHeader, " ", 2)
-				if len(parts) == 2 && parts[0] == "Bearer" {
-					tokenString := parts[1]
-					// Parse JWT without verification (just extract claims)
-					// The token is already verified by the auth service
-					role := auth.ExtractRoleFromToken(tokenString)
-					if role != "" {
-						userRole = role
-						c.Set("user_role", role)
+			var tokenString string
+
+			// Try cookie first
+			if cookieToken, err := c.Cookie("access_token"); err == nil && cookieToken != "" {
+				tokenString = cookieToken
+			} else {
+				// Fall back to Authorization header
+				authHeader := c.GetHeader("Authorization")
+				if authHeader != "" {
+					parts := strings.SplitN(authHeader, " ", 2)
+					if len(parts) == 2 && parts[0] == "Bearer" {
+						tokenString = parts[1]
 					}
+				}
+			}
+
+			if tokenString != "" {
+				// Parse JWT without verification (just extract claims)
+				// The token is already verified by the auth service
+				role := auth.ExtractRoleFromToken(tokenString)
+				if role != "" {
+					userRole = role
+					c.Set("user_role", role)
 				}
 			}
 		}
