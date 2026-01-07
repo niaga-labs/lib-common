@@ -129,18 +129,8 @@ func (m *JWTManager) GenerateTempToken(userID uuid.UUID, email, purpose string) 
 	return m.generateToken(userID, email, purpose, tempTTL, "temp")
 }
 
-// ExtractRoleFromToken extracts the role from a JWT token without verification
-// This is useful when the token has already been verified by another service
-func ExtractRoleFromToken(tokenString string) string {
-	token, _, err := jwt.NewParser().ParseUnverified(tokenString, &Claims{})
-	if err != nil {
-		return ""
-	}
-
-	claims, ok := token.Claims.(*Claims)
-	if !ok {
-		return ""
-	}
-
-	return claims.Role
-}
+// ExtractRoleFromToken is DEPRECATED and removed for security reasons.
+// SECURITY: Never extract claims without signature verification.
+// Always use JWTManager.ValidateToken() to verify tokens before trusting claims.
+// This function previously allowed privilege escalation attacks by accepting
+// forged tokens with arbitrary role claims.

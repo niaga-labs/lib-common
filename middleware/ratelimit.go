@@ -89,3 +89,95 @@ func (rl *RateLimiter) CleanupLimiters() {
 func (rl *RateLimiter) Shutdown() {
 	close(rl.done)
 }
+
+// EndpointRateLimiter provides endpoint-specific rate limiting
+type EndpointRateLimiter struct {
+	limiters map[string]*RateLimiter
+	mu       sync.RWMutex
+}
+
+// NewEndpointRateLimiter creates an endpoint-specific rate limiter
+func NewEndpointRateLimiter() *EndpointRateLimiter {
+	return &EndpointRateLimiter{
+		limiters: make(map[string]*RateLimiter),
+	}
+}
+
+// Configure sets up rate limiting for a specific endpoint pattern
+// requestsPerMinute is the number of requests allowed per minute
+func (erl *EndpointRateLimiter) Configure(endpoint string, requestsPerMinute int, burst int) *EndpointRateLimiter {
+	erl.mu.Lock()
+	defer erl.mu.Unlock()
+
+	// Convert requests per minute to requests per second
+	rps := float64(requestsPerMinute) / 60.0
+	if rps < 0.1 {
+		rps = 0.1 // Minimum 6 requests per minute
+	}
+
+	limiter := &RateLimiter{
+		limiters: make(map[string]*rate.Limiter),
+		rate:     rate.Limit(rps),
+		burst:    burst,
+		done:     make(chan struct{}),
+	}
+	limiter.CleanupLimiters()
+
+	erl.limiters[endpoint] = limiter
+	return erl
+}
+
+// Limit returns a middleware that rate limits the endpoint
+// Uses the configured rate for the endpoint, or applies default if not configured
+func (erl *EndpointRateLimiter) Limit(endpoint string, defaultRPM int) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		erl.mu.RLock()
+		limiter, exists := erl.limiters[endpoint]
+		erl.mu.RUnlock()
+
+		if !exists {
+			// Use default rate limiter for unconfigured endpoints
+			erl.Configure(endpoint, defaultRPM, defaultRPM/10+1)
+			erl.mu.RLock()
+			limiter = erl.limiters[endpoint]
+			erl.mu.RUnlock()
+		}
+
+		ip := c.ClientIP()
+		ipLimiter := limiter.getLimiter(ip)
+
+		if !ipLimiter.Allow() {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "RATE_LIMIT_EXCEEDED",
+					"message": "Too many requests. Please slow down and try again.",
+				},
+			})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// Shutdown gracefully stops all endpoint limiters
+func (erl *EndpointRateLimiter) Shutdown() {
+	erl.mu.Lock()
+	defer erl.mu.Unlock()
+
+	for _, limiter := range erl.limiters {
+		limiter.Shutdown()
+	}
+}
+
+// PaymentRateLimiter returns a pre-configured rate limiter for payment endpoints
+// SECURITY: Strict rate limiting on payment endpoints prevents abuse
+func PaymentRateLimiter() *EndpointRateLimiter {
+	return NewEndpointRateLimiter().
+		Configure("/api/v1/payment/process", 5, 2).         // 5 per minute, burst 2
+		Configure("/api/v1/payment/curlec/initiate", 3, 1). // 3 per minute, burst 1
+		Configure("/api/v1/payment/curlec/verify", 10, 3).  // 10 per minute, burst 3
+		Configure("/api/v1/payment/webhook", 100, 20)       // 100 per minute for webhooks
+}

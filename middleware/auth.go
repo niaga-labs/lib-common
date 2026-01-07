@@ -75,28 +75,25 @@ func RoleMiddleware(allowedRoles ...string) gin.HandlerFunc {
 }
 
 // RequireAdmin is a convenience middleware that checks for admin role
-// It can parse JWT from Authorization header or use pre-set claims/role from context
+// SECURITY: This middleware requires AuthMiddleware to be called first, which performs
+// cryptographic signature verification. Never trust role claims from unverified tokens.
 func RequireAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var userRole string
 
-		// First try to get role from context (if set by prior middleware)
+		// Check for role from verified claims set by AuthMiddleware
+		// AuthMiddleware MUST be called before this middleware to ensure token verification
 		if claims, exists := c.Get("claims"); exists {
-			if claimsMap, ok := claims.(map[string]interface{}); ok {
+			if authClaims, ok := claims.(*auth.Claims); ok {
+				userRole = authClaims.Role
+			} else if claimsMap, ok := claims.(map[string]interface{}); ok {
 				if role, ok := claimsMap["role"].(string); ok {
 					userRole = role
 				}
 			}
 		}
 
-		// Try direct role check from context
-		if userRole == "" {
-			if role, exists := c.Get("role"); exists {
-				if r, ok := role.(string); ok {
-					userRole = r
-				}
-			}
-		}
+		// Fallback to user_role set by AuthMiddleware
 		if userRole == "" {
 			if role, exists := c.Get("user_role"); exists {
 				if r, ok := role.(string); ok {
@@ -105,37 +102,10 @@ func RequireAdmin() gin.HandlerFunc {
 			}
 		}
 
-		// If still no role, try to parse JWT from cookie or Authorization header
+		// SECURITY: If no role found, the request was not authenticated
+		// Do NOT attempt to parse tokens here - that's AuthMiddleware's job
 		if userRole == "" {
-			var tokenString string
-
-			// Try cookie first
-			if cookieToken, err := c.Cookie("access_token"); err == nil && cookieToken != "" {
-				tokenString = cookieToken
-			} else {
-				// Fall back to Authorization header
-				authHeader := c.GetHeader("Authorization")
-				if authHeader != "" {
-					parts := strings.SplitN(authHeader, " ", 2)
-					if len(parts) == 2 && parts[0] == "Bearer" {
-						tokenString = parts[1]
-					}
-				}
-			}
-
-			if tokenString != "" {
-				// Parse JWT without verification (just extract claims)
-				// The token is already verified by the auth service
-				role := auth.ExtractRoleFromToken(tokenString)
-				if role != "" {
-					userRole = role
-					c.Set("user_role", role)
-				}
-			}
-		}
-
-		if userRole == "" {
-			response.Forbidden(c, "User role not found")
+			response.Unauthorized(c, "Authentication required - use AuthMiddleware before RequireAdmin")
 			c.Abort()
 			return
 		}
@@ -145,6 +115,56 @@ func RequireAdmin() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+
+		c.Next()
+	}
+}
+
+// RequireAdminWithJWT is a standalone admin middleware that performs its own JWT verification
+// Use this when you cannot chain AuthMiddleware before RequireAdmin
+func RequireAdminWithJWT(jwtManager *auth.JWTManager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var tokenString string
+
+		// Try cookie first (more secure for web clients)
+		if cookieToken, err := c.Cookie("access_token"); err == nil && cookieToken != "" {
+			tokenString = cookieToken
+		} else {
+			// Fall back to Authorization header
+			authHeader := c.GetHeader("Authorization")
+			if authHeader != "" {
+				parts := strings.SplitN(authHeader, " ", 2)
+				if len(parts) == 2 && parts[0] == "Bearer" {
+					tokenString = parts[1]
+				}
+			}
+		}
+
+		if tokenString == "" {
+			response.Unauthorized(c, "Authentication required")
+			c.Abort()
+			return
+		}
+
+		// SECURITY: Always verify token signature before trusting claims
+		claims, err := jwtManager.ValidateToken(tokenString)
+		if err != nil {
+			response.Unauthorized(c, "Invalid or expired token")
+			c.Abort()
+			return
+		}
+
+		if claims.Role != "admin" && claims.Role != "super_admin" {
+			response.Forbidden(c, "Admin access required")
+			c.Abort()
+			return
+		}
+
+		// Set verified claims in context for downstream handlers
+		c.Set("user_id", claims.UserID.String())
+		c.Set("user_email", claims.Email)
+		c.Set("user_role", claims.Role)
+		c.Set("claims", claims)
 
 		c.Next()
 	}

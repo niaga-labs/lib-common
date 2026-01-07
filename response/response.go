@@ -179,3 +179,131 @@ func ServiceUnavailable(c *gin.Context, message string) {
 func TooManyRequests(c *gin.Context, message string, details interface{}) {
 	Error(c, http.StatusTooManyRequests, "RATE_LIMIT_EXCEEDED", message, details)
 }
+
+// ErrorMapping maps domain errors to API error responses
+// SECURITY: This prevents leaking internal error details to clients
+type ErrorMapping struct {
+	HTTPStatus int
+	Code       string
+	Message    string
+}
+
+// ErrorTranslator translates domain errors to user-friendly API responses
+type ErrorTranslator struct {
+	mappings map[string]ErrorMapping
+	fallback ErrorMapping
+}
+
+// NewErrorTranslator creates a new error translator with default mappings
+func NewErrorTranslator() *ErrorTranslator {
+	return &ErrorTranslator{
+		mappings: make(map[string]ErrorMapping),
+		fallback: ErrorMapping{
+			HTTPStatus: http.StatusInternalServerError,
+			Code:       "INTERNAL_ERROR",
+			Message:    "An unexpected error occurred. Please try again later.",
+		},
+	}
+}
+
+// Register adds an error mapping
+func (t *ErrorTranslator) Register(errorText string, mapping ErrorMapping) *ErrorTranslator {
+	t.mappings[errorText] = mapping
+	return t
+}
+
+// Translate converts a domain error to an API error response
+// It checks if the error message contains any registered error patterns
+func (t *ErrorTranslator) Translate(c *gin.Context, err error, logger interface{}) {
+	if err == nil {
+		return
+	}
+
+	errMsg := err.Error()
+
+	// Check for registered error patterns
+	for pattern, mapping := range t.mappings {
+		if containsPattern(errMsg, pattern) {
+			Error(c, mapping.HTTPStatus, mapping.Code, mapping.Message, nil)
+			return
+		}
+	}
+
+	// Use fallback for unregistered errors
+	// Log the actual error internally but don't expose to client
+	Error(c, t.fallback.HTTPStatus, t.fallback.Code, t.fallback.Message, nil)
+}
+
+// containsPattern checks if the error message contains the pattern
+func containsPattern(errMsg, pattern string) bool {
+	return len(pattern) > 0 && len(errMsg) >= len(pattern) &&
+		(errMsg == pattern ||
+		 len(errMsg) > len(pattern) &&
+		 (errMsg[:len(pattern)] == pattern ||
+		  errMsg[len(errMsg)-len(pattern):] == pattern ||
+		  contains(errMsg, pattern)))
+}
+
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+// DefaultOrderErrorTranslator returns a pre-configured translator for order service
+func DefaultOrderErrorTranslator() *ErrorTranslator {
+	return NewErrorTranslator().
+		Register("order not found", ErrorMapping{
+			HTTPStatus: http.StatusNotFound,
+			Code:       "ORDER_NOT_FOUND",
+			Message:    "The requested order was not found.",
+		}).
+		Register("unauthorized access", ErrorMapping{
+			HTTPStatus: http.StatusForbidden,
+			Code:       "ACCESS_DENIED",
+			Message:    "You don't have permission to access this order.",
+		}).
+		Register("insufficient stock", ErrorMapping{
+			HTTPStatus: http.StatusConflict,
+			Code:       "INSUFFICIENT_STOCK",
+			Message:    "Some items in your order are no longer available.",
+		}).
+		Register("invalid status transition", ErrorMapping{
+			HTTPStatus: http.StatusBadRequest,
+			Code:       "INVALID_STATUS_TRANSITION",
+			Message:    "This order cannot be updated to the requested status.",
+		}).
+		Register("order cannot be cancelled", ErrorMapping{
+			HTTPStatus: http.StatusBadRequest,
+			Code:       "CANNOT_CANCEL",
+			Message:    "This order can no longer be cancelled.",
+		}).
+		Register("concurrent modification", ErrorMapping{
+			HTTPStatus: http.StatusConflict,
+			Code:       "CONCURRENT_MODIFICATION",
+			Message:    "This order was modified by another process. Please refresh and try again.",
+		}).
+		Register("payment failed", ErrorMapping{
+			HTTPStatus: http.StatusPaymentRequired,
+			Code:       "PAYMENT_FAILED",
+			Message:    "Payment processing failed. Please try again.",
+		}).
+		Register("invalid payment", ErrorMapping{
+			HTTPStatus: http.StatusBadRequest,
+			Code:       "INVALID_PAYMENT",
+			Message:    "Payment validation failed.",
+		}).
+		Register("cart is empty", ErrorMapping{
+			HTTPStatus: http.StatusBadRequest,
+			Code:       "EMPTY_CART",
+			Message:    "Your cart is empty. Add items before placing an order.",
+		}).
+		Register("cart not found", ErrorMapping{
+			HTTPStatus: http.StatusNotFound,
+			Code:       "CART_NOT_FOUND",
+			Message:    "Shopping cart not found.",
+		})
+}
