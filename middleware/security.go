@@ -98,7 +98,7 @@ func CORS(allowedOrigins []string) gin.HandlerFunc {
 		// Check if origin is allowed
 		allowed := false
 		for _, allowedOrigin := range allowedOrigins {
-			if origin == allowedOrigin || allowedOrigin == "*" {
+			if origin == allowedOrigin {
 				allowed = true
 				break
 			}
