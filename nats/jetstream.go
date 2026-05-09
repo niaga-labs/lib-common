@@ -38,7 +38,7 @@ type JetStreamClient struct {
 	logger *zap.Logger
 }
 
-// Default stream configurations for Kilang services
+// Default stream configurations for Niaga services
 var DefaultStreams = []StreamConfig{
 	{
 		Name:        "ORDERS",
@@ -81,7 +81,7 @@ var DefaultStreams = []StreamConfig{
 // NewJetStreamClient creates a new JetStream client with retry logic
 func NewJetStreamClient(natsURL string, logger *zap.Logger) (*JetStreamClient, error) {
 	opts := []nats.Option{
-		nats.Name("kilang-service"),
+		nats.Name("niaga-service"),
 		nats.ReconnectWait(2 * time.Second),
 		nats.MaxReconnects(-1), // Unlimited reconnects
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {

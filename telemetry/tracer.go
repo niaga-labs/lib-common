@@ -96,7 +96,7 @@ func (t *Telemetry) initTracer() error {
 			semconv.ServiceName(t.config.ServiceName),
 			semconv.ServiceVersion(t.config.ServiceVersion),
 			semconv.DeploymentEnvironment(t.config.Environment),
-			attribute.String("service.namespace", "kilang-batik"),
+			attribute.String("service.namespace", "niaga"),
 		),
 		resource.WithHost(),
 		resource.WithOS(),
