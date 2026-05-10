@@ -15,6 +15,7 @@ import (
 type EventModel struct {
 	ID            uint            `gorm:"primaryKey"`
 	EventID       string          `gorm:"uniqueIndex;size:100;not null"`
+	SchemaVersion int             `gorm:"not null;default:1"`
 	AggregateType string          `gorm:"size:100;not null;index:idx_aggregate"`
 	AggregateID   string          `gorm:"size:100;not null;index:idx_aggregate"`
 	EventType     string          `gorm:"size:100;not null;index"`
@@ -75,8 +76,14 @@ func (s *PostgresEventStore) Append(ctx context.Context, events []*DomainEvent, 
 
 		// Insert all events
 		for _, event := range events {
+			schemaVersion := event.SchemaVersion
+			if schemaVersion == 0 {
+				schemaVersion = 1
+			}
+
 			model := &EventModel{
 				EventID:       event.ID,
+				SchemaVersion: schemaVersion,
 				AggregateType: event.AggregateType,
 				AggregateID:   event.AggregateID,
 				EventType:     event.EventType,
@@ -120,8 +127,14 @@ func (s *PostgresEventStore) LoadFrom(ctx context.Context, aggregateType, aggreg
 
 	events := make([]*DomainEvent, len(models))
 	for i, m := range models {
+		schemaVersion := m.SchemaVersion
+		if schemaVersion == 0 {
+			schemaVersion = 1
+		}
+
 		events[i] = &DomainEvent{
 			ID:            m.EventID,
+			SchemaVersion: schemaVersion,
 			AggregateType: m.AggregateType,
 			AggregateID:   m.AggregateID,
 			EventType:     m.EventType,
@@ -154,8 +167,14 @@ func (s *PostgresEventStore) LoadByEventType(ctx context.Context, eventType stri
 
 	events := make([]*DomainEvent, len(models))
 	for i, m := range models {
+		schemaVersion := m.SchemaVersion
+		if schemaVersion == 0 {
+			schemaVersion = 1
+		}
+
 		events[i] = &DomainEvent{
 			ID:            m.EventID,
+			SchemaVersion: schemaVersion,
 			AggregateType: m.AggregateType,
 			AggregateID:   m.AggregateID,
 			EventType:     m.EventType,

@@ -8,6 +8,7 @@ import (
 // DomainEvent represents a domain event that can be stored.
 type DomainEvent struct {
 	ID            string          `json:"id"`
+	SchemaVersion int             `json:"schema_version"`
 	AggregateType string          `json:"aggregate_type"`
 	AggregateID   string          `json:"aggregate_id"`
 	EventType     string          `json:"event_type"`
@@ -44,6 +45,7 @@ func NewDomainEvent(
 	now := time.Now()
 	return &DomainEvent{
 		ID:            generateEventID(),
+		SchemaVersion: 1,
 		AggregateType: aggregateType,
 		AggregateID:   aggregateID,
 		EventType:     eventType,

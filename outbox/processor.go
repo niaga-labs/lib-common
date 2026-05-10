@@ -12,15 +12,20 @@ type Publisher interface {
 	Publish(subject string, data []byte) error
 }
 
+// HeaderPublisher can publish an event with NATS headers.
+type HeaderPublisher interface {
+	PublishWithHeaders(subject string, data []byte, headers map[string]string) error
+}
+
 // Processor polls the outbox table and publishes events
 type Processor struct {
-	outbox      *Outbox
-	publisher   Publisher
-	logger      *zap.Logger
-	interval    time.Duration
-	batchSize   int
-	maxRetries  int
-	done        chan struct{}
+	outbox     *Outbox
+	publisher  Publisher
+	logger     *zap.Logger
+	interval   time.Duration
+	batchSize  int
+	maxRetries int
+	done       chan struct{}
 }
 
 // ProcessorConfig holds configuration for the Processor
@@ -130,6 +135,16 @@ func (p *Processor) processEvent(event Event) error {
 	// e.g., "order.created", "inventory.restocked"
 	subject := event.EventType
 
+	headers := map[string]string{
+		"Nats-Msg-Id": event.ID.String(),
+	}
+
+	if publisher, ok := p.publisher.(HeaderPublisher); ok {
+		return publisher.PublishWithHeaders(subject, event.Payload, headers)
+	}
+
+	// Backward-compatible fallback for existing publishers. Prefer implementing
+	// HeaderPublisher so JetStream can dedupe outbox retries by event ID.
 	return p.publisher.Publish(subject, event.Payload)
 }
 

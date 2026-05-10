@@ -38,8 +38,85 @@ type JetStreamClient struct {
 	logger *zap.Logger
 }
 
+// OutboxPublisher adapts JetStreamClient to lib-common/outbox.Processor.
+type OutboxPublisher struct {
+	client *JetStreamClient
+}
+
+// NewOutboxPublisher creates a publisher compatible with outbox.Processor.
+func NewOutboxPublisher(client *JetStreamClient) *OutboxPublisher {
+	return &OutboxPublisher{client: client}
+}
+
+// Publish publishes without additional headers.
+func (p *OutboxPublisher) Publish(subject string, data []byte) error {
+	return p.client.publish(context.Background(), subject, data, nil)
+}
+
+// PublishWithHeaders publishes with NATS headers, including Nats-Msg-Id.
+func (p *OutboxPublisher) PublishWithHeaders(subject string, data []byte, headers map[string]string) error {
+	return p.client.publish(context.Background(), subject, data, headers)
+}
+
 // Default stream configurations for Niaga services
+// Legacy ORDERS/INVENTORY/PRODUCTS stay during migration. The old
+// NOTIFICATIONS catch-all stream used events.>, which overlaps the new
+// per-domain streams and cannot be safely ensured alongside them.
 var DefaultStreams = []StreamConfig{
+	{
+		Name:        "EVENTS_USER",
+		Description: "User account and authentication events",
+		Subjects:    []string{"events.user.>"},
+		MaxAge:      30 * 24 * time.Hour,
+		MaxMsgs:     50000,
+		MaxBytes:    50 * 1024 * 1024,
+		Replicas:    1,
+	},
+	{
+		Name:        "EVENTS_ORDER",
+		Description: "Order and payment lifecycle events",
+		Subjects:    []string{"events.order.>"},
+		MaxAge:      30 * 24 * time.Hour,
+		MaxMsgs:     100000,
+		MaxBytes:    200 * 1024 * 1024,
+		Replicas:    1,
+	},
+	{
+		Name:        "EVENTS_INVENTORY",
+		Description: "Inventory and stock events",
+		Subjects:    []string{"events.inventory.>"},
+		MaxAge:      14 * 24 * time.Hour,
+		MaxMsgs:     100000,
+		MaxBytes:    150 * 1024 * 1024,
+		Replicas:    1,
+	},
+	{
+		Name:        "EVENTS_CATALOG",
+		Description: "Catalog product and promotion events",
+		Subjects:    []string{"events.catalog.>"},
+		MaxAge:      7 * 24 * time.Hour,
+		MaxMsgs:     50000,
+		MaxBytes:    100 * 1024 * 1024,
+		Replicas:    1,
+	},
+	{
+		Name:        "EVENTS_SUPPORT",
+		Description: "Support ticket events",
+		Subjects:    []string{"events.support.>"},
+		MaxAge:      7 * 24 * time.Hour,
+		MaxMsgs:     50000,
+		MaxBytes:    50 * 1024 * 1024,
+		Replicas:    1,
+	},
+	{
+		Name:        "EVENTS_MARKETPLACE",
+		Description: "Marketplace synchronization events",
+		Subjects:    []string{"events.marketplace.>"},
+		MaxAge:      3 * 24 * time.Hour,
+		MaxMsgs:     50000,
+		MaxBytes:    50 * 1024 * 1024,
+		Replicas:    1,
+	},
 	{
 		Name:        "ORDERS",
 		Description: "Order lifecycle events",
@@ -63,15 +140,6 @@ var DefaultStreams = []StreamConfig{
 		Description: "Product catalog events",
 		Subjects:    []string{"product.>"},
 		MaxAge:      7 * 24 * time.Hour,
-		MaxMsgs:     50000,
-		MaxBytes:    50 * 1024 * 1024,
-		Replicas:    1,
-	},
-	{
-		Name:        "NOTIFICATIONS",
-		Description: "Notification events",
-		Subjects:    []string{"events.>"},
-		MaxAge:      3 * 24 * time.Hour, // Keep for 3 days
 		MaxMsgs:     50000,
 		MaxBytes:    50 * 1024 * 1024,
 		Replicas:    1,
@@ -182,7 +250,7 @@ func (c *JetStreamClient) CreateDurableConsumer(ctx context.Context, cfg Consume
 		AckWait:       cfg.AckWait,
 		MaxDeliver:    cfg.MaxDeliver,
 		MaxAckPending: cfg.MaxAckPending,
-		DeliverPolicy: jetstream.DeliverAllPolicy, // Start from first message
+		DeliverPolicy: jetstream.DeliverNewPolicy,
 	}
 
 	consumer, err := stream.CreateOrUpdateConsumer(ctx, consumerCfg)
@@ -200,7 +268,28 @@ func (c *JetStreamClient) CreateDurableConsumer(ctx context.Context, cfg Consume
 
 // Publish publishes a message to JetStream with acknowledgment
 func (c *JetStreamClient) Publish(ctx context.Context, subject string, data []byte) error {
-	ack, err := c.js.Publish(ctx, subject, data)
+	return c.publish(ctx, subject, data, nil)
+}
+
+// PublishWithHeaders publishes a message to JetStream with NATS headers.
+func (c *JetStreamClient) PublishWithHeaders(subject string, data []byte, headers map[string]string) error {
+	return c.publish(context.Background(), subject, data, headers)
+}
+
+func (c *JetStreamClient) publish(ctx context.Context, subject string, data []byte, headers map[string]string) error {
+	msg := &nats.Msg{
+		Subject: subject,
+		Data:    data,
+	}
+
+	if len(headers) > 0 {
+		msg.Header = make(nats.Header, len(headers))
+		for key, value := range headers {
+			msg.Header.Set(key, value)
+		}
+	}
+
+	ack, err := c.js.PublishMsg(ctx, msg)
 	if err != nil {
 		c.logger.Error("Failed to publish message",
 			zap.String("subject", subject),

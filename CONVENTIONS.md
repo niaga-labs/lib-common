@@ -329,12 +329,40 @@ Triggers:
 
 ---
 
-## 11. What this doc does NOT cover
+## 11. NATS event conventions
 
-- **NATS event subjects, payload shape, idempotency, DLQs** — see the
-  separate NATS event standardization plan
-  (`KilangDesaMurniBatik/.claude/memory/nats-events-plan.md` in the
-  workspace).
+NATS events use the transactional outbox plus JetStream path:
+
+- Publishers write `outbox.events` in the same database transaction as the
+  business mutation. Do not publish directly from request handlers.
+- `lib-common/outbox.Processor` publishes each outbox row to JetStream and
+  sets `Nats-Msg-Id` to the outbox row UUID for retry deduplication.
+- Use `nats.NewOutboxPublisher(jetStreamClient)` when wiring the processor to
+  the shared JetStream client.
+- Subjects use `events.<domain>.<action>` with a stable dotted action segment
+  when needed, for example `events.order.created`,
+  `events.catalog.product.updated`, and `events.support.ticket.resolved`.
+- Domain events include `schema_version`; additive payload changes bump this
+  field, while breaking changes require a `.v2` subject and a dual-publish
+  window.
+- Consumers use durable JetStream consumers with explicit ack, then call
+  `eventsourcing.IdempotencyChecker.CheckAndMark(ctx, eventID, consumerName)`
+  before running the handler. Duplicates are acked and skipped.
+- Failed messages are routed through `eventsourcing.DLQRouter`, which inserts
+  into `events.failed` and terminates JetStream redelivery.
+- Durable consumer names are permanent. Do not rename a durable consumer after
+  it has shipped; create a new consumer only when a replay boundary is intended.
+- Ordering is only promised per aggregate and per subject. Global ordering is
+  not part of the contract.
+- New consumers use `DeliverNewPolicy` by default. Manual replay comes from
+  `events.failed` rows or an explicit JetStream replay tool.
+
+Canonical subjects live in `eventsourcing/catalog.go`.
+
+---
+
+## 12. What this doc does NOT cover
+
 - **GraphQL / gRPC** — Niaga is REST-only.
 - **API gateway swap** — nginx stays; no Traefik/Kong.
 - **Multi-tenant schema changes** — out of scope for v1
