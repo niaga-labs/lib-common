@@ -15,6 +15,35 @@ func TestDefaultStreamsDoNotIncludeCatchAllEventsStream(t *testing.T) {
 	}
 }
 
+// Phase 10 removed the legacy ORDERS/INVENTORY/PRODUCTS streams (and their
+// bare order.>, inventory.>, product.> subject patterns). This test guards
+// against re-introduction — the per-domain EVENTS_* streams are the single
+// source of truth.
+func TestDefaultStreamsDoNotIncludeLegacyStreams(t *testing.T) {
+	bannedNames := map[string]struct{}{
+		"ORDERS":        {},
+		"INVENTORY":     {},
+		"PRODUCTS":      {},
+		"NOTIFICATIONS": {},
+	}
+	bannedSubjects := map[string]struct{}{
+		"order.>":     {},
+		"inventory.>": {},
+		"product.>":   {},
+	}
+
+	for _, stream := range DefaultStreams {
+		if _, banned := bannedNames[stream.Name]; banned {
+			t.Errorf("legacy stream %s still in DefaultStreams", stream.Name)
+		}
+		for _, subject := range stream.Subjects {
+			if _, banned := bannedSubjects[subject]; banned {
+				t.Errorf("stream %s still binds legacy subject %s", stream.Name, subject)
+			}
+		}
+	}
+}
+
 func TestDefaultStreamsIncludePerDomainEventStreams(t *testing.T) {
 	want := map[string]string{
 		"EVENTS_USER":        "events.user.>",

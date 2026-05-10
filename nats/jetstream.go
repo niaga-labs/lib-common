@@ -58,10 +58,10 @@ func (p *OutboxPublisher) PublishWithHeaders(subject string, data []byte, header
 	return p.client.publish(context.Background(), subject, data, headers)
 }
 
-// Default stream configurations for Niaga services
-// Legacy ORDERS/INVENTORY/PRODUCTS stay during migration. The old
-// NOTIFICATIONS catch-all stream used events.>, which overlaps the new
-// per-domain streams and cannot be safely ensured alongside them.
+// Default stream configurations for Niaga services. Phase 10 retired the
+// legacy ORDERS/INVENTORY/PRODUCTS streams (and the older NOTIFICATIONS
+// catch-all on events.>) — every publisher now writes to the canonical
+// per-domain EVENTS_* streams below.
 var DefaultStreams = []StreamConfig{
 	{
 		Name:        "EVENTS_USER",
@@ -113,33 +113,6 @@ var DefaultStreams = []StreamConfig{
 		Description: "Marketplace synchronization events",
 		Subjects:    []string{"events.marketplace.>"},
 		MaxAge:      3 * 24 * time.Hour,
-		MaxMsgs:     50000,
-		MaxBytes:    50 * 1024 * 1024,
-		Replicas:    1,
-	},
-	{
-		Name:        "ORDERS",
-		Description: "Order lifecycle events",
-		Subjects:    []string{"order.>"},
-		MaxAge:      7 * 24 * time.Hour, // Keep for 7 days
-		MaxMsgs:     100000,
-		MaxBytes:    100 * 1024 * 1024, // 100MB
-		Replicas:    1,
-	},
-	{
-		Name:        "INVENTORY",
-		Description: "Inventory and stock events",
-		Subjects:    []string{"inventory.>"},
-		MaxAge:      7 * 24 * time.Hour,
-		MaxMsgs:     100000,
-		MaxBytes:    100 * 1024 * 1024,
-		Replicas:    1,
-	},
-	{
-		Name:        "PRODUCTS",
-		Description: "Product catalog events",
-		Subjects:    []string{"product.>"},
-		MaxAge:      7 * 24 * time.Hour,
 		MaxMsgs:     50000,
 		MaxBytes:    50 * 1024 * 1024,
 		Replicas:    1,
