@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"runtime/debug"
 
+	"github.com/KilangDesaMurniBatik/lib-common/response"
 	"github.com/gin-gonic/gin"
-	"github.com/niaga-platform/lib-common/response"
 	"go.uber.org/zap"
 )
 
@@ -16,7 +16,7 @@ func RecoveryMiddleware(logger *zap.Logger) gin.HandlerFunc {
 		defer func() {
 			if err := recover(); err != nil {
 				stackTrace := string(debug.Stack())
-				
+
 				logger.Error("Panic recovered",
 					zap.Any("error", err),
 					zap.String("stack", stackTrace),
@@ -24,7 +24,7 @@ func RecoveryMiddleware(logger *zap.Logger) gin.HandlerFunc {
 					zap.String("method", c.Request.Method),
 				)
 
-				response.Error(c, http.StatusInternalServerError, "INTERNAL_SERVER_ERROR", 
+				response.Error(c, http.StatusInternalServerError, "INTERNAL_SERVER_ERROR",
 					fmt.Sprintf("Internal server error: %v", err), nil)
 				c.Abort()
 			}

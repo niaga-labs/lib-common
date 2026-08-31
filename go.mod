@@ -1,4 +1,4 @@
-module github.com/niaga-platform/lib-common
+module github.com/KilangDesaMurniBatik/lib-common
 
 go 1.24.0
 
