@@ -1,0 +1,22 @@
+# Thin caller. The checks live in one place:
+# KilangDesaMurniBatik/lib-common/.github/workflows/go-ci.yml
+#
+# The Go version comes from this repo's go.mod, so it cannot drift. The workflow
+# this replaced pinned Go 1.22 against a go.mod that says 1.24 and would have
+# failed on every run.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    uses: KilangDesaMurniBatik/lib-common/.github/workflows/go-ci.yml@main
+    with:
+      # 9 file(s) are not gofmt-clean today. CI reports them as a
+      # warning until they are cleaned up, then this line comes out. (DMB-34)
+      enforce-gofmt: false

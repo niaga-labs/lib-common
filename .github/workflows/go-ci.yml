@@ -1,0 +1,101 @@
+# Reusable CI for every Go repo in this org.
+#
+# Called from each repo's .github/workflows/ci.yml:
+#
+#   jobs:
+#     ci:
+#       uses: KilangDesaMurniBatik/lib-common/.github/workflows/go-ci.yml@main
+#
+# The Go version is read from the caller's go.mod, never pinned here -- the
+# workflows this replaced all pinned 1.22 against a go.mod that says 1.24, so
+# every one of them would have failed on the first run.
+#
+# The three checks can be relaxed per repo while existing debt is cleared. Each
+# caller that sets one to false says how much debt and which ticket covers it.
+
+name: Go CI
+
+on:
+  workflow_call:
+    inputs:
+      enforce-gofmt:
+        description: "Fail the build when gofmt reports unformatted files."
+        type: boolean
+        default: true
+      enforce-vet:
+        description: "Fail the build when go vet reports a problem."
+        type: boolean
+        default: true
+      enforce-tests:
+        description: "Fail the build when go test fails."
+        type: boolean
+        default: true
+      main-package:
+        description: "Package to build, e.g. ./cmd/server. Empty builds ./... only."
+        type: string
+        default: ""
+
+jobs:
+  ci:
+    name: gofmt · vet · build · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::group::Unformatted files"
+            echo "$unformatted"
+            echo "::endgroup::"
+            count=$(echo "$unformatted" | wc -l)
+            if [ "${{ inputs.enforce-gofmt }}" = "true" ]; then
+              echo "::error::$count file(s) are not gofmt-clean. Run: gofmt -w ."
+              exit 1
+            fi
+            echo "::warning::$count file(s) are not gofmt-clean (not enforced in this repo yet)."
+          else
+            echo "All files are gofmt-clean."
+          fi
+
+      - name: go vet
+        run: |
+          if go vet ./... 2>vet.log; then
+            echo "go vet clean."
+          else
+            echo "::group::go vet"
+            cat vet.log
+            echo "::endgroup::"
+            if [ "${{ inputs.enforce-vet }}" = "true" ]; then
+              echo "::error::go vet reported problems."
+              exit 1
+            fi
+            echo "::warning::go vet reported problems (not enforced in this repo yet)."
+          fi
+
+      - name: go build
+        run: |
+          go build ./...
+          if [ -n "${{ inputs.main-package }}" ]; then
+            go build -o /tmp/service "${{ inputs.main-package }}"
+          fi
+
+      - name: go test
+        run: |
+          if go test -race ./... ; then
+            echo "Tests passed."
+          elif [ "${{ inputs.enforce-tests }}" = "true" ]; then
+            echo "::error::go test failed."
+            exit 1
+          else
+            echo "::warning::go test failed (not enforced in this repo yet)."
+          fi

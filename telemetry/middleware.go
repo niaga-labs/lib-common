@@ -99,6 +99,6 @@ func GetSpanContext(c *gin.Context) trace.SpanContext {
 }
 
 // InjectTracingHeaders injects trace context into outgoing request headers
-func InjectTracingHeaders(ctx gin.Context, req *http.Request) {
+func InjectTracingHeaders(ctx *gin.Context, req *http.Request) {
 	otel.GetTextMapPropagator().Inject(ctx.Request.Context(), propagation.HeaderCarrier(req.Header))
 }
