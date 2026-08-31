@@ -34,6 +34,14 @@ on:
         description: "Package to build, e.g. ./cmd/server. Empty builds ./... only."
         type: string
         default: ""
+    secrets:
+      LIB_COMMON_TOKEN:
+        description: >-
+          Token that can read KilangDesaMurniBatik/lib-common. Required for every repo whose
+          go.mod replaces lib-common with a local path, because the default GITHUB_TOKEN is
+          scoped to the calling repository only and cannot read a second private repo.
+          Unset is allowed so lib-common's own CI (which has no such dependency) still runs.
+        required: false
 
 jobs:
   ci:
@@ -42,17 +50,51 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Every service reaches lib-common through `replace => ../lib-common`, a path that
+      # only exists on a developer's laptop. CI checks out one repo, so without this the
+      # module cannot resolve and golangci-lint exits 3 while go test fails to build. We
+      # check lib-common out inside the workspace and repoint the replace at it; go.mod is
+      # never committed from here, the edit lives and dies with the runner. (DMB-69)
+      - name: Check out lib-common when this repo depends on it
+        id: libcommon
+        run: |
+          if grep -q 'lib-common' go.mod; then
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "This repo does not depend on lib-common; nothing to do."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.libcommon.outputs.needed == 'true'
+        with:
+          repository: KilangDesaMurniBatik/lib-common
+          ref: main
+          token: ${{ secrets.LIB_COMMON_TOKEN || github.token }}
+          path: .lib-common
+
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Repoint the lib-common replace at the checkout
+        if: steps.libcommon.outputs.needed == 'true'
+        run: |
+          module=$(grep -oE 'github\.com/[^/]+/lib-common' go.mod | head -1)
+          echo "Repointing $module -> ./.lib-common"
+          go mod edit -replace "$module=./.lib-common"
 
       - name: Download dependencies
         run: go mod download
 
       - name: gofmt
         run: |
-          unformatted=$(gofmt -l .)
+          # .lib-common is a checkout of another repo, not ours to format. go vet, build and
+          # test ignore it already because it carries its own go.mod, but gofmt walks the
+          # filesystem and would report its files as ours.
+          unformatted=$(find . -name '*.go' -not -path './.lib-common/*' -not -path './vendor/*' -print0 \
+            | xargs -0 -r gofmt -l)
           if [ -n "$unformatted" ]; then
             echo "::group::Unformatted files"
             echo "$unformatted"
