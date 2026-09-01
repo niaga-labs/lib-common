@@ -98,7 +98,17 @@ func GetSpanContext(c *gin.Context) trace.SpanContext {
 	return trace.SpanContext{}
 }
 
-// InjectTracingHeaders injects trace context into outgoing request headers
-func InjectTracingHeaders(ctx gin.Context, req *http.Request) {
+// InjectTracingHeaders injects trace context into outgoing request headers, so a
+// call this service makes downstream joins the same trace as the request that
+// triggered it.
+//
+// Takes *gin.Context, not gin.Context. gin.Context contains a sync.RWMutex, so
+// passing it by value copies a lock -- go vet reports "passes lock by value" and
+// the copy's mutex guards nothing. Every gin handler already holds a pointer, so
+// there was never a reason to take a value here (DMB-93).
+func InjectTracingHeaders(ctx *gin.Context, req *http.Request) {
+	if ctx == nil || ctx.Request == nil || req == nil {
+		return
+	}
 	otel.GetTextMapPropagator().Inject(ctx.Request.Context(), propagation.HeaderCarrier(req.Header))
 }
