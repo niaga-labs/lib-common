@@ -2,17 +2,18 @@ package response
 
 import (
 	"net/http"
+	"reflect"
 
 	"github.com/gin-gonic/gin"
 )
 
 // Response represents a standard API response
 type Response struct {
-	Success bool        `json:"success"`
-	Message string      `json:"message,omitempty"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   *ErrorDetail `json:"error,omitempty"` 
-	Meta    *Meta       `json:"meta,omitempty"`
+	Success bool         `json:"success"`
+	Message string       `json:"message,omitempty"`
+	Data    interface{}  `json:"data,omitempty"`
+	Error   *ErrorDetail `json:"error,omitempty"`
+	Meta    *Meta        `json:"meta,omitempty"`
 }
 
 // ErrorDetail contains error information
@@ -36,7 +37,7 @@ func Success(c *gin.Context, statusCode int, message string, data interface{}) {
 	c.JSON(statusCode, Response{
 		Success: true,
 		Message: message,
-		Data:    data,
+		Data:    emptyCollection(data),
 	})
 }
 
@@ -45,7 +46,7 @@ func SuccessWithMeta(c *gin.Context, statusCode int, message string, data interf
 	c.JSON(statusCode, Response{
 		Success: true,
 		Message: message,
-		Data:    data,
+		Data:    emptyCollection(data),
 		Meta:    meta,
 	})
 }
@@ -134,7 +135,7 @@ func SuccessWithPagination(c *gin.Context, message string, data interface{}, pag
 	c.JSON(http.StatusOK, Response{
 		Success: true,
 		Message: message,
-		Data:    data,
+		Data:    emptyCollection(data),
 		Meta: &Meta{
 			Page:       pagination.Page,
 			Limit:      pagination.Limit,
@@ -238,10 +239,10 @@ func (t *ErrorTranslator) Translate(c *gin.Context, err error, logger interface{
 func containsPattern(errMsg, pattern string) bool {
 	return len(pattern) > 0 && len(errMsg) >= len(pattern) &&
 		(errMsg == pattern ||
-		 len(errMsg) > len(pattern) &&
-		 (errMsg[:len(pattern)] == pattern ||
-		  errMsg[len(errMsg)-len(pattern):] == pattern ||
-		  contains(errMsg, pattern)))
+			len(errMsg) > len(pattern) &&
+				(errMsg[:len(pattern)] == pattern ||
+					errMsg[len(errMsg)-len(pattern):] == pattern ||
+					contains(errMsg, pattern)))
 }
 
 func contains(s, substr string) bool {
@@ -306,4 +307,37 @@ func DefaultOrderErrorTranslator() *ErrorTranslator {
 			Code:       "CART_NOT_FOUND",
 			Message:    "Shopping cart not found.",
 		})
+}
+
+// emptyCollection turns a nil slice or nil map into an empty one so a list
+// endpoint answers `"data": []` rather than `"data": null` when nothing matched.
+//
+// A Go handler that returns `var rows []T` with no rows hands back a nil slice,
+// and encoding/json writes nil slices as `null`. Every client then has to carry a
+// null guard before it can call `.map()`, and an API contract that says "a list"
+// should not sometimes mean "nothing at all" (DMB-74).
+//
+// What it deliberately does NOT touch:
+//   - an untyped nil, so `Deleted` and friends still answer `null`;
+//   - a nil pointer, because "the object you asked for does not exist" is genuinely
+//     null and must not become `[]`;
+//   - a non-nil collection, including one that is already empty.
+func emptyCollection(data interface{}) interface{} {
+	if data == nil {
+		return nil
+	}
+
+	v := reflect.ValueOf(data)
+	switch v.Kind() {
+	case reflect.Slice:
+		if v.IsNil() {
+			return reflect.MakeSlice(v.Type(), 0, 0).Interface()
+		}
+	case reflect.Map:
+		if v.IsNil() {
+			return reflect.MakeMap(v.Type()).Interface()
+		}
+	}
+
+	return data
 }

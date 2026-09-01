@@ -5,6 +5,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — empty collections serialised as null (DMB-74)
+
+- **`"data": null` where a list was promised.** `Success`, `SuccessWithMeta` and `SuccessWithPagination` passed
+  the handler's value straight to `c.JSON`. A Go repository with no rows returns a **nil slice**, and
+  `encoding/json` writes a nil slice as `null` — so `GET /api/v1/inventory/movements` and
+  `GET /api/v1/admin/payments` answered `{"success":true,"data":null,...}` on an empty result. Every client
+  had to guard for null before calling `.map()`, and two bruno probes had to drop their `data: isArray`
+  assertion because of it.
+- A nil slice or nil map now becomes an empty one before it is written, so an empty list is `[]` and an empty
+  map is `{}`. Fixed here rather than in each handler: all ten services reach `c.JSON` through this package,
+  so one change covers every paginated and list endpoint instead of a sweep that would miss the next one.
+- Deliberately untouched, each pinned by a test:
+  - an **untyped nil** — `Deleted` and friends still answer with no data;
+  - a **nil pointer** — "the object you asked for does not exist" is genuinely `null`, and turning it into
+    `[]` would be a lie;
+  - any non-nil collection, including one that is already empty.
+
+### Added — tests (DMB-74)
+
+- `response/response_test.go`, 6 passing — first tests for this package. They assert on the decoded JSON a
+  client actually receives, not on Go values: nil slice through `Paginated` and through `OK`, nil map, a
+  populated slice passing through unchanged, a nil pointer staying `null`, and `Deleted` unaffected.
+
 ### Changed
 
 - **Module path moved to the surviving org.** `github.com/niaga-platform/lib-common` is now
