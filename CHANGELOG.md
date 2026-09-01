@@ -5,6 +5,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — InjectTracingHeaders passed a lock by value (DMB-93)
+
+- `telemetry.InjectTracingHeaders` took `gin.Context` **by value**. `gin.Context` contains a `sync.RWMutex`,
+  so every call would have copied a lock — `go vet`: *passes lock by value*. A copied mutex guards nothing,
+  because the copy has its own.
+- Now takes `*gin.Context`. Every gin handler already holds a pointer, so there was never a reason to take a
+  value. Nil-guards `ctx`, `ctx.Request` and `req` while in there.
+- **This is a signature change on an exported function**, but nothing calls it — checked every service and
+  library in the workspace. It was an unused helper with a latent bug rather than a working one.
+- With this, **`go vet ./...` is clean in all eleven Go repos**. It was not before.
+
 ### Fixed — empty collections serialised as null (DMB-74)
 
 - **`"data": null` where a list was promised.** `Success`, `SuccessWithMeta` and `SuccessWithPagination` passed
