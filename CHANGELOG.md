@@ -5,6 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — module path moved to github.com/niaga-labs (NIAGA-103)
+
+- The GitHub org was renamed `KilangDesaMurniBatik` → **`niaga-labs`**, so the module is now
+  **`github.com/niaga-labs/lib-common`**. `go.mod`, the three internal imports in `middleware/` and the
+  `CLAUDE.md` header moved with it; the remote was repointed. Consumers change their `require` line and the
+  local `replace` target name — the `=> ../lib-common` path itself is unchanged.
+- History lines in this file keep the old path on purpose: they record what was true then.
+
 ### Fixed — InjectTracingHeaders passed a lock by value (DMB-93)
 
 - `telemetry.InjectTracingHeaders` took `gin.Context` **by value**. `gin.Context` contains a `sync.RWMutex`,
