@@ -5,6 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed - the Claude layer says Niaga and lists only open units (NIAGA-105)
+
+- `CLAUDE.md` and `.claude/memory/MEMORY.md` are titled **Niaga**, not Desa Murni Batik, and the Jira project
+  is **NIAGA**. Ticket keys in both files moved from `DMB-n` to `NIAGA-n` (same issues, the old keys are
+  aliases); git branch names keep the `DMB-` they were created with, because those are real refs.
+- **The open-units table was wrong, not just stale**: every ticket it listed had already been closed. It now
+  lists the tickets that actually name this repo, checked against Jira on 2026-09-03.
+- `.claude/memory/project_state.md` gained a `2026-09-03` resume block with the current default branch and
+  sha; the previous block was demoted to a checkpoint unedited, so it still reads as what was true that day.
+
 ### Changed — module path moved to github.com/niaga-labs (NIAGA-103)
 
 - The GitHub org was renamed `KilangDesaMurniBatik` → **`niaga-labs`**, so the module is now

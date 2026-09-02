@@ -1,7 +1,7 @@
-# Desa Murni Batik — lib-common
+# Niaga — lib-common
 
-Shared Go library for every Desa Murni service: config loading, database and NATS helpers, auth middleware, logging, the transactional outbox and event sourcing.
-Jira project **DMB** · GitHub `niaga-labs/lib-common` · Go 1.24.0 · module `github.com/niaga-labs/lib-common`.
+Shared Go library for every Niaga service: config loading, database and NATS helpers, auth middleware, logging, the transactional outbox and event sourcing.
+Jira project **NIAGA** · GitHub `niaga-labs/lib-common` · Go 1.24.0 · module `github.com/niaga-labs/lib-common`.
 Library, not a service: no `cmd/`, no port, no database of its own.
 Owns `events`, `outbox` in `niaga_db` (3 tables referenced by `TableName()`).
 
@@ -42,4 +42,7 @@ Global rules live in `~/.claude/`; this file only adds what is specific here.
 
 | Ticket | State | Blocked on | Note |
 |---|---|---|---|
-| — | | | no open ticket names this repo |
+| NIAGA-69 | To Do | **owner decision** | CI cannot resolve this module from a service repo. The fix is written here on `feat/DMB-19-reusable-ci` (31c68e5, **unpushed**); merging it needs a call on how CI reads a private repo — an org PAT secret, or making this repo public |
+| NIAGA-117 | To Do | — | subject catalog: marketplace should publish sync-completed/failed on the canonical subjects; two unused subjects are removed or documented as reserved |
+| NIAGA-76 | To Do | owner | Windows blocks the `eventsourcing` test binary after the rename |
+| NIAGA-151 | To Do | — | deep review of this repo and `service-auth` |

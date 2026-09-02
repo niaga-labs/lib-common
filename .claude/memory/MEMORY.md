@@ -1,4 +1,4 @@
-# Memory index — Desa Murni Batik / lib-common
+# Memory index — Niaga / lib-common
 
 One terse line per file. Loaded every session; details live in the files.
 
