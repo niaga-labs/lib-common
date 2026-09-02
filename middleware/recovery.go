@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"runtime/debug"
 
-	"github.com/KilangDesaMurniBatik/lib-common/response"
 	"github.com/gin-gonic/gin"
+	"github.com/niaga-labs/lib-common/response"
 	"go.uber.org/zap"
 )
 

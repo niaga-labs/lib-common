@@ -1,7 +1,7 @@
 # Desa Murni Batik — lib-common
 
 Shared Go library for every Desa Murni service: config loading, database and NATS helpers, auth middleware, logging, the transactional outbox and event sourcing.
-Jira project **DMB** · GitHub `KilangDesaMurniBatik/lib-common` · Go 1.24.0 · module `github.com/KilangDesaMurniBatik/lib-common`.
+Jira project **DMB** · GitHub `niaga-labs/lib-common` · Go 1.24.0 · module `github.com/niaga-labs/lib-common`.
 Library, not a service: no `cmd/`, no port, no database of its own.
 Owns `events`, `outbox` in `niaga_db` (3 tables referenced by `TableName()`).
 

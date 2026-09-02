@@ -3,9 +3,9 @@ package middleware
 import (
 	"strings"
 
-	"github.com/KilangDesaMurniBatik/lib-common/auth"
-	"github.com/KilangDesaMurniBatik/lib-common/response"
 	"github.com/gin-gonic/gin"
+	"github.com/niaga-labs/lib-common/auth"
+	"github.com/niaga-labs/lib-common/response"
 )
 
 // AuthMiddleware validates JWT tokens
