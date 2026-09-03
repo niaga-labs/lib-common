@@ -5,6 +5,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — auth.NewInternalHTTPClient, the calling half of the guard (NIAGA-114)
+
+- The service clients that call `/internal/*` build requests in a dozen places each, mostly through
+  `http.Client.Post`, with no shared helper to hang a header on. `InternalTokenTransport` sets
+  `X-Internal-Token` in a `RoundTripper` instead, so it covers **every** request a client makes — including
+  the ones someone adds later without reading the ticket.
+- An empty token sends **no** header, so a misconfigured caller takes a clear 401 from the callee rather than
+  presenting an empty credential.
+- `RoundTrip` clones the request rather than mutating the caller's, as the `http.RoundTripper` contract
+  requires.
+- 4 tests, including one that runs the client against a server applying the same rule the middleware does —
+  the two halves have to agree or the guard passes nothing.
+
 ### Added — auth.InternalToken, a guard for the service-to-service routes (NIAGA-114)
 
 - The `/api/v1/internal/*` routes across four services reserve, deduct and restock inventory, reserve
