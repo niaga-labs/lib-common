@@ -5,6 +5,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — auth.InternalToken, a guard for the service-to-service routes (NIAGA-114)
+
+- The `/api/v1/internal/*` routes across four services reserve, deduct and restock inventory, reserve
+  flash-sale allocations, approve agent commissions and create marketplace orders. **Not one of them checked
+  anything.** `service-inventory`'s block carried the comment *"should be protected by internal
+  network/service mesh in production"* and `service-order`'s said *"No auth required - called by marketplace
+  service"*. There is no service mesh, and nginx proxies those paths.
+- `auth.InternalToken(expected)` requires an `X-Internal-Token` header matching in **constant time**
+  (`crypto/subtle`). `auth.ResolveInternalToken(appEnv)` reads `INTERNAL_API_TOKEN`, falls back to the
+  published `dev-internal-token` placeholder **in development only**, and returns an error outside it — both
+  when unset *and* when it still holds the placeholder, which is in every `.env.example` in the workspace.
+  `MustResolveInternalToken` panics, for a `main()` that should not start without one.
+- **An unconfigured service authenticates nobody.** An empty expected token refuses every request, including
+  an empty header. If it accepted anything when unconfigured, a service that failed to read its environment
+  would silently serve stock movements to the world — the shape of NIAGA-170.
+- `IsDevEnv` treats an unrecognised `APP_ENV` as production, because guessing wrong in that direction is the
+  safe way to be wrong.
+- 9 tests: missing, wrong, correct and prefix tokens; the unconfigured case; the dev fallback; the placeholder
+  refused outside development; whitespace trimmed.
+- Deliberately **not** the database-backed `APIKeyMiddleware` already in this package, which no service uses.
+  Callers here are our own services on a private network, and a shared token read from the environment is the
+  smallest thing that closes the hole. Per-service keys with scopes remain a later question.
+
 ### Added — the order event payload contract (NIAGA-166)
 
 - `eventsourcing/order_payloads.go` defines `OrderCreatedPayload`, `OrderStatusChangedPayload`,
