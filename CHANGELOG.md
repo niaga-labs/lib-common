@@ -5,6 +5,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — the order event payload contract (NIAGA-166)
+
+- `eventsourcing/order_payloads.go` defines `OrderCreatedPayload`, `OrderStatusChangedPayload`,
+  `OrderEventItem` and `OrderShippingAddress` — the contract for the two order subjects that carry
+  customer-facing notifications. It lives here because it is an agreement between two services that never
+  import each other, and until now there was nowhere for it to live, so the two sides drifted in **five**
+  separate ways at once and every one of them was silent.
+- The drift, for the record: the publisher sent `new_status` and the consumer read `status`; `customer_email`
+  and `customer_name` were never published; the address was `address` as an object against `shipping_address`
+  as a string; items were `{product_id, unit_price}` against `{name, price}`; and the SMS leg was handed an
+  email address. `encoding/json` does not error on a field the sender omitted, so nothing failed, nothing
+  retried, and nothing reached a dead-letter queue — the order moved to shipped and the customer heard
+  nothing.
+- `DeliverableTo()` on both payloads, so a consumer can skip and say so instead of calling an email service
+  with an empty `To` — which is what `service-notification` did. `OrderShippingAddress.OneLine()` renders an
+  address for a mail or SMS body, skipping empty parts.
+- 6 tests pin the **wire format**, not the Go structs: every required JSON key must be emitted by a populated
+  payload, `status` must not appear where `new_status` is meant, and a round trip must keep the recipient, the
+  product names, the unit prices and the phone number. They fail on a rename, which is the change that breaks
+  a consumer silently.
+
 ### Changed - the Claude layer says Niaga and lists only open units (NIAGA-105)
 
 - `CLAUDE.md` and `.claude/memory/MEMORY.md` are titled **Niaga**, not Desa Murni Batik, and the Jira project
