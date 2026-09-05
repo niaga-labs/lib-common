@@ -7,8 +7,14 @@ through.
 Module path `github.com/niaga-labs/lib-common`. Public since 2026-09-05, so CI in the other repos checks it
 out with no token.
 
-Consumed by the eight Go services via a `replace` directive in their `go.mod` during local development, and by
-a sibling checkout in CI.
+Consumed by **ten** Go services — every `service-*` repo — via a `replace` directive in their `go.mod` during
+local development, and by a sibling checkout in CI. Counted with
+`grep -rl "replace github.com/niaga-labs/lib-common" --include=go.mod`.
+
+**Ten consume it; only eight have CI.** `service-marketplace` and `service-support` have no
+`.github/workflows` at all, so the familiar "the eight Go services" from the workspace's `ci-known-red.txt`
+is a count of *CI workflows*, not of lib-common's consumers. An earlier draft of this line conflated the two
+— caught in review, and worth naming because the two numbers describe different sets.
 
 ## Packages
 
@@ -73,9 +79,14 @@ Publisher and consumer are read from where the constant is used — `internal/ev
 
 **`events.inventory.stock.updated` has TWO publishers.** service-inventory publishes it from its own
 `publisher.go`; service-order also enqueues it through the outbox in `internal/events/nats_publisher.go`.
-Both go through the outbox and both are correct. Do not confuse this with **NIAGA-178**, which is a
-*separate* bare-subject publish at `service-order/internal/services/stock_reservation.go:452` that bypasses
-the outbox and reaches nobody.
+Both go through the outbox and **both are correct today**.
+
+That second publisher is where **NIAGA-178** used to live: service-order published a *bare*
+`inventory.stock.updated` that no consumer subscribed to, so the stock push to the marketplace never
+happened while the code read as though it did. **That is fixed** — the ticket is Done, no bare publish
+remains anywhere in service-order, and the code carries a comment saying what it used to do. Recorded
+because "service-order publishes stock.updated" is true both before and after the fix, and only the subject
+told them apart.
 
 **The two `events.marketplace.sync.*` subjects have a publisher and no consumer.** They are real events on
 the wire that nothing subscribes to yet. That is not a defect and not the same as Reserved — it is worth
@@ -102,6 +113,9 @@ the catalog as well as from that service's own README, which already records it 
 
 ### Adding a subject
 
+0. **Never rename a subject constant or its string once published.** A rename is a silent break: the old
+   publisher keeps emitting and the new consumer keeps listening, each perfectly healthy, and nothing
+   connects them. Add a new subject and retire the old one deliberately instead.
 1. Declare the constant in `eventsourcing/catalog.go` and add it to `SubjectDomains`.
 2. Add its row to the table above — including who consumes it. **A subject with no consumer is a message
    into a void**; if there is no consumer yet, say so in the row rather than leaving the column blank.

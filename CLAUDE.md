@@ -10,7 +10,8 @@ Global rules live in `~/.claude/`; this file only adds what is specific here.
 ## Orient here first
 
 - `.claude/memory/project_state.md` — **resume here** (`/continue` reads it, `/recap` rewrites it).
-- `CHANGELOG.md` — what changed (**does not exist yet** — create on first ship).
+- `CHANGELOG.md` — what changed.
+- `README.md` — package index and the **event subject catalog** (subject > publisher > consumers), NIAGA-117.
 - `../CLAUDE.md` — the workspace repo map and the cross-repo change order.
 - `../infra-platform/docs/LOCAL_DEV.md` — bringing the whole platform up locally.
 
@@ -36,13 +37,13 @@ Global rules live in `~/.claude/`; this file only adds what is specific here.
 - Entry point: no `cmd/` — this is a library
 - Packages: `auth`, `config`, `database`, `domain`, `eventsourcing`, `lock`, `logger`, `middleware`, `monitoring`, `nats`
 - Config: `config/`
-- Tests: 6 `*_test.go` file(s)
+- Tests: **10** `*_test.go` files across `auth`, `domain`, `eventsourcing`, `nats`, `outbox` and `response`. **81 pass, 0 fail.**
 
 ## Open units
 
 | Ticket | State | Blocked on | Note |
 |---|---|---|---|
-| NIAGA-69 | To Do | **owner decision** | CI cannot resolve this module from a service repo. The fix is written here on `feat/DMB-19-reusable-ci` (31c68e5, **unpushed**); merging it needs a call on how CI reads a private repo — an org PAT secret, or making this repo public |
-| NIAGA-117 | To Do | — | subject catalog: marketplace should publish sync-completed/failed on the canonical subjects; two unused subjects are removed or documented as reserved |
+| NIAGA-69 | **Done** | — | CI could not resolve this module from a service repo. Settled by the owner ruling of 2026-09-05: **this repo is public**, so a workflow checks it out with no token. The eight services with CI workflows now do exactly that |
+| NIAGA-117 | **Done** | — | the subject catalog is audited and documented in `README.md` — 24 subjects, each with a publisher and consumers or a stated reason it has neither. service-marketplace needed no change: it already published on the canonical constants |
 | NIAGA-76 | To Do | owner | Windows blocks the `eventsourcing` test binary after the rename |
 | NIAGA-151 | To Do | — | deep review of this repo and `service-auth` |

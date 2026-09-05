@@ -32,9 +32,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   would reasonably conclude cart-abandonment email works. It cannot.
 - `catalog.go` carries the same facts at the declarations, so someone reading the constants sees them
   without opening the README.
+- **A count in the first draft was wrong and review caught it.** The README said lib-common is "consumed by
+   the eight Go services". It is **ten** — every `service-*` repo carries the `replace` directive. The "eight"
+   is the number of services with a **CI workflow** (`service-marketplace` and `service-support` have none),
+   which is the phrasing the workspace's `ci-known-red.txt` uses. Two different sets, one number; both are
+   now stated so the conflation does not recur. Fitting error for a document whose premise is "measured, not
+   assumed" — it was the one line in it that wasn't.
+- **A second stale fact of my own, found while checking the review's reasoning.** The first draft described
+  **NIAGA-178** in the present tense — "a bare-subject publish in service-order that bypasses the outbox and
+  reaches nobody". It is **fixed and Done**: no bare publish remains anywhere in service-order, and the code
+  carries a comment saying what it used to do. Corrected to the past tense, and kept in the README rather
+  than dropped, because "service-order publishes stock.updated" is true both before and after the fix — only
+  the subject told them apart.
+- **This repo's own `CLAUDE.md` was stale in three places** and is corrected here, since the parent epic is
+  literally *Docs tell the truth*: it said `CHANGELOG.md` "does not exist yet" (it does), listed **NIAGA-69**
+  as blocked on an owner decision (Done — this repo went public on 2026-09-05), and counted **6** test files
+  (there are **10**).
 - Tests: **81 pass, 0 fail** in this repo (unchanged — this is documentation and comments).
   `go build ./...` and `go vet ./...` clean.
-
 
 ### Added — auth.NewInternalHTTPClient, the calling half of the guard (NIAGA-114)
 
