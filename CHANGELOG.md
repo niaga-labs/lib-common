@@ -25,15 +25,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   exactly that case.
 - **The variant fields really are omitted when absent**, rather than emitted empty: an empty string renders as
   a blank line in a template instead of being skipped by it.
-- **`TestNewSubjectsAreRegisteredInSubjectDomains`** closes a gap NIAGA-117 documented but did not guard: a
-  subject declared and left out of `SubjectDomains` is invisible to anything walking the catalog. Go cannot
-  enumerate a package's constants, so it checks the recent subjects rather than claiming to be exhaustive —
-  the README table remains the exhaustive record.
+- **`ProductURL` carries the full call-to-action link**, built by the publisher — the convention every other
+  templated email here follows (`reset_url`, `verification_url`, `cart_url`). Handing over only a slug would
+  make service-notification own the storefront's base URL *and* its `/products/:slug` pattern, so a route
+  change would have to be made in a service with nothing to do with the storefront. Raised in review, and
+  decided **now** rather than later: service-customer has no storefront base URL configured yet, so adding
+  the field after its publisher was built would mean reworking a pinned wire shape.
+- **`TestEverySubjectIsRegisteredInSubjectDomains` parses `catalog.go`'s own source** rather than checking a
+  hand-maintained list. A list carries the identical flaw it is meant to catch — a subject added next month
+  and left out of the *list* is exactly as invisible as one left out of the map. Mutation-checked: removing
+  the `SubjectDomains` entry makes it fail by name. It also refuses to pass on a parse that found nothing.
+- The new subject sits **above** the `RESERVED` block under its own `IN PROGRESS — NIAGA-123` header. The
+  first draft spliced it *inside* that block, so a reader skimming headers would have read it as Reserved —
+  the opposite of the truth. Caught in review.
 - The README table gains the row, marked **landing** rather than Reserved: Reserved means nobody intends to
   build it; this one is mid-build, and the note says to delete the marker once NIAGA-123 closes. A subject
   stuck between *declared* and *published* is exactly how the four orphaned `events.cart.*` entries happened.
-- Tests: **86 pass, 0 fail** (was 81) — 5 new. `go build ./...` and `go vet ./...` clean.
-
+- Tests: **87 pass, 0 fail** (was 81) — 6 new. `go build ./...` and `go vet ./...` clean.
 
 ### Added — README with the subject > publisher > consumers table (NIAGA-117)
 

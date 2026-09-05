@@ -2,6 +2,9 @@ package eventsourcing
 
 import (
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"strings"
 	"testing"
 )
@@ -74,29 +77,63 @@ func TestBackInStockOmitsAbsentVariantFields(t *testing.T) {
 	}
 }
 
-// Every subject this package declares must also be in SubjectDomains, because
+// EVERY subject this package declares must also be in SubjectDomains, because
 // that map is what tells a reader which service owns a subject. A subject
 // declared and left out of it is invisible to anything that walks the catalog.
 //
-// Go cannot enumerate a package's constants, so this checks the subjects added
-// most recently and the ones a reader is most likely to add beside them, rather
-// than claiming to be exhaustive. The README table is the exhaustive record
-// (NIAGA-117).
-func TestNewSubjectsAreRegisteredInSubjectDomains(t *testing.T) {
-	for _, s := range []string{
-		SubjectCustomerBackInStock,
-		SubjectCustomerCreated,
-		SubjectAgentCommissionPaid,
-		SubjectInventoryProductRestocked,
-		SubjectMarketplaceSyncCompleted,
-	} {
-		domain, ok := SubjectDomains[s]
+// This reads catalog.go's OWN SOURCE rather than a hand-maintained list. A list
+// would carry the identical flaw it is meant to catch: a subject added next
+// month and left out of the LIST is exactly as invisible as one left out of the
+// map. Parsing the file makes the check self-updating, which is the only version
+// of this test worth having (raised in review of NIAGA-123).
+func TestEverySubjectIsRegisteredInSubjectDomains(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "catalog.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parsing catalog.go: %v", err)
+	}
+
+	declared := map[string]string{} // const name -> subject string
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.CONST {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			vs, ok := spec.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			for i, name := range vs.Names {
+				if !strings.HasPrefix(name.Name, "Subject") || i >= len(vs.Values) {
+					continue
+				}
+				lit, ok := vs.Values[i].(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					continue
+				}
+				declared[name.Name] = strings.Trim(lit.Value, `"`)
+			}
+		}
+	}
+
+	// A parse that found nothing is a passing test that checked nothing — the
+	// failure mode ~/.claude/rules/verification.md exists for.
+	if len(declared) < 20 {
+		t.Fatalf("only %d Subject constants parsed out of catalog.go; the parse is wrong, not the catalog", len(declared))
+	}
+
+	for name, subject := range declared {
+		domain, ok := SubjectDomains[subject]
 		if !ok {
-			t.Errorf("%q is declared but missing from SubjectDomains", s)
+			t.Errorf("%s (%q) is declared but missing from SubjectDomains", name, subject)
 			continue
 		}
 		if domain == "" {
-			t.Errorf("%q maps to an empty domain", s)
+			t.Errorf("%s (%q) maps to an empty domain", name, subject)
+		}
+		if !strings.HasPrefix(subject, "events.") {
+			t.Errorf("%s (%q) is not canonical; it would reach no consumer", name, subject)
 		}
 	}
 }
@@ -110,5 +147,38 @@ func TestBackInStockSubjectIsCanonical(t *testing.T) {
 	}
 	if SubjectCustomerBackInStock != "events.customer.back_in_stock" {
 		t.Errorf("subject = %q; changing a published subject silently breaks every consumer", SubjectCustomerBackInStock)
+	}
+}
+
+// product_url is the email's call-to-action, and it follows the convention every
+// other templated email here uses: reset_url, verification_url and cart_url are
+// all built by the PUBLISHER and handed over whole.
+//
+// The point is that service-notification never learns the storefront's route
+// shape. Give it a slug instead and it owns the base URL and the /products/:slug
+// pattern, so a storefront route change has to be made in a service that has
+// nothing to do with the storefront.
+//
+// It is optional rather than required because service-customer has no storefront
+// base URL configured yet (checked 2026-09-06) — NIAGA-123's publisher has to add
+// that config. An absent product_url is an email without a working link, not a
+// broken one, so this is a soft edge rather than a hard failure.
+func TestProductURLIsCarriedWholeAndOmittedWhenAbsent(t *testing.T) {
+	withURL, err := json.Marshal(CustomerBackInStockPayload{
+		ProductURL: "https://shop.example.com/products/kain-batik",
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(withURL), `"product_url":"https://shop.example.com/products/kain-batik"`) {
+		t.Errorf("the full URL was not carried through: %s", withURL)
+	}
+
+	without, err := json.Marshal(CustomerBackInStockPayload{ProductName: "Kain Batik"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(without), "product_url") {
+		t.Errorf("product_url should be omitted when empty, got: %s", without)
 	}
 }

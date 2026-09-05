@@ -37,7 +37,7 @@ Global rules live in `~/.claude/`; this file only adds what is specific here.
 - Entry point: no `cmd/` — this is a library
 - Packages: `auth`, `config`, `database`, `domain`, `eventsourcing`, `lock`, `logger`, `middleware`, `monitoring`, `nats`
 - Config: `config/`
-- Tests: **10** `*_test.go` files across `auth`, `domain`, `eventsourcing`, `nats`, `outbox` and `response`. **81 pass, 0 fail.**
+- Tests: **11** `*_test.go` files across `auth`, `domain`, `eventsourcing`, `nats`, `outbox` and `response`. **87 pass, 0 fail.**
 
 ## Open units
 

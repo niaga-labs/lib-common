@@ -41,6 +41,20 @@ const (
 	SubjectMarketplaceSyncCompleted = "events.marketplace.sync.completed"
 	SubjectMarketplaceSyncFailed    = "events.marketplace.sync.failed"
 
+	// IN PROGRESS — NIAGA-123. Not Reserved: this one is mid-build, and the
+	// publisher and consumer land in the same ticket. Deliberately declared ahead
+	// of both ends so service-customer and service-notification have one shape to
+	// build against rather than two guesses.
+	//
+	// It is DOWNSTREAM of SubjectInventoryProductRestocked, not a duplicate of it:
+	// inventory says a product came back; this says a NAMED CUSTOMER ASKED TO BE
+	// TOLD. The subscription lookup between the two is service-customer's job, so
+	// notification never has to know what a subscription is.
+	//
+	// If this is still the only reference to it long after NIAGA-123 closed, it
+	// has become Reserved by accident — check both ends before assuming it works.
+	SubjectCustomerBackInStock = "events.customer.back_in_stock"
+
 	// RESERVED — DECLARED, NEVER PUBLISHED, NEVER CONSUMED (NIAGA-117).
 	//
 	// Audited 2026-09-06 across every repo in the workspace, by two independent
@@ -55,16 +69,6 @@ const (
 	// Deleting costs that and saves nothing. Re-check before publishing either:
 	// a subject with no consumer is a message into a void, and the marketplace
 	// pair below is already in that state.
-	// SubjectCustomerBackInStock is published by service-customer when a restock
-	// matches a customer's back-in-stock subscription, and consumed by
-	// service-notification to send the email (NIAGA-123).
-	//
-	// It is DOWNSTREAM of SubjectInventoryProductRestocked, not a duplicate of it:
-	// inventory says a product came back; this says a named customer asked to be
-	// told. The subscription lookup between the two is service-customer's job, so
-	// notification never has to know what a subscription is.
-	SubjectCustomerBackInStock = "events.customer.back_in_stock"
-
 	SubjectCustomerCreated     = "events.customer.created"
 	SubjectAgentCommissionPaid = "events.agent.commission.paid"
 )
@@ -150,6 +154,17 @@ type CustomerBackInStockPayload struct {
 	ProductName    string `json:"product_name"`
 	ProductSlug    string `json:"product_slug,omitempty"`
 	ProductImage   string `json:"product_image,omitempty"`
+
+	// ProductURL is the FULL link the email's call-to-action uses, built by the
+	// publisher — the same convention every other templated email here follows
+	// (reset_url, verification_url, cart_url in service-notification's types).
+	//
+	// The publisher builds it so the CONSUMER NEVER HAS TO KNOW THE STOREFRONT'S
+	// ROUTE SHAPE. Handing over only a slug would make service-notification own
+	// the base URL and the /products/:slug pattern, and every route change would
+	// then have to be made in a service that has nothing to do with the
+	// storefront. product_slug stays for templates that want the bare value.
+	ProductURL string `json:"product_url,omitempty"`
 
 	// The variant fields are omitempty because a product without variants has
 	// none, and an empty string in the template renders as a blank line rather

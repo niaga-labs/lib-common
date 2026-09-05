@@ -20,8 +20,18 @@ metadata:
 - **The subject is DOWNSTREAM of `events.inventory.product.restocked`, not a duplicate.** Inventory says a
   product came back; this says a named customer asked to be told. The subscription lookup between them is
   service-customer's job, so notification never learns what a subscription is.
-- **The payload is deliberately self-contained** — customer, product, variant, quantity — so the consumer
-  never queries another service. A consumer that looks things up fails when the other service is down.
+- **The payload is deliberately self-contained** — customer, product, variant, quantity, **and the full
+  `product_url`** — so the consumer never queries another service, and never learns the storefront's route
+  shape. That last field follows `reset_url`/`verification_url`/`cart_url`: the publisher builds the whole
+  link. Added in review, and deliberately BEFORE the publisher exists, because adding it afterwards would
+  mean reworking a pinned wire shape.
+- **TWO THINGS PART 2 MUST HANDLE, both found while reviewing part 1:**
+  1. **service-customer has no storefront base URL configured** (checked — no `FRONTEND_URL` or equivalent in
+     its config or `.env.example`). It needs one to fill `product_url`. Three surfaces per `rules/config.md`:
+     the code, `.env.example`, and the compose block.
+  2. **`CustomerEmail` can be empty at the publish site.** `subscriber.go:269-272` only sets it
+     `if sub.Customer != nil`, and the payload marks it required. An empty email satisfies "key present" and
+     is useless for sending mail — guard before enqueueing, the way `OrderCreatedData.DeliverableTo()` does.
 - **What service-customer needs next, measured:** it has a `*gorm.DB` and NATS wiring but **no outbox and no
   publisher at all** — only `internal/events/subscriber.go`. The no-op to replace is
   `SimpleNotificationClient.SendBackInStockNotification` (subscriber.go:327), whose own TODO proposes an HTTP
