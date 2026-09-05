@@ -5,7 +5,36 @@ metadata:
   type: project
 ---
 
-## 2026-09-03 state (resume here)
+## 2026-09-06 state (resume here)
+
+- **Repo:** `main`, branch `feat/NIAGA-117-subject-catalog`. Module `github.com/niaga-labs/lib-common`,
+  **public** since 2026-09-05.
+- **This unit (NIAGA-117): the subject catalog is documented and audited.** New `README.md` (the repo had
+  none) carrying the subject > publisher > consumers table; `catalog.go` annotated at the declarations.
+- **Verified:** `gofmt` clean on `catalog.go`, `go build ./...` and `go vet ./...` clean,
+  `go test ./... -count=1` **81 pass / 0 fail** across 6 packages. service-marketplace re-checked and still
+  **162 pass / 0 fail** — it needed no change (see below).
+- **HALF THIS TICKET WAS ALREADY DONE AND THE TICKET DID NOT KNOW.** It asks that marketplace publish on
+  `SubjectMarketplaceSyncCompleted/Failed` "instead of the bare marketplace.sync.completed
+  (internal/events/subscriber.go:15-16)". service-marketplace's `internal/events/publisher.go:18-19` already
+  aliases the lib-common constants, and there is no bare subject anywhere in that repo. The cited lines are
+  now an import block. Same stale-premise shape as NIAGA-202 and NIAGA-116.
+- **ITS GATE HAD BEEN MET FOR TWO DAYS AND NOBODY RE-CHECKED.** The 2026-09-03 skip comment said the gate
+  ("the canonical-subjects ticket is Done") was unmet because NIAGA-116 was To Do. NIAGA-116 went Done on
+  2026-09-04. The skip was right when written and stale by the next morning — worth remembering that a
+  gate comment is a snapshot, not a standing fact.
+- **The audit used two methods, and that is the part worth keeping.** Constant search plus literal-string
+  search across every tracked file of every repo. `~/.claude/rules/verification.md` requires a second method
+  before acting on a "no matches", and this ticket's whole output is a set of no-matches.
+- **Four categories, not the two the ticket names:** publisher+consumer (20 subjects) · publisher, no
+  consumer (the 2 marketplace sync) · Reserved, neither (2) · routed by service-notification but absent from
+  the catalog entirely (4, the cart/email-verification set).
+- **Recommended next unit:** **NIAGA-183** — `marketplace.platform_credentials` is wired into `main.go` and
+  `routes.go` but its table was never added to `infra-database`, so two endpoints 500 and two of the six
+  bruno probes fail. **The dev stack is UP** as of this session, so needs-stack work is viable again.
+  Otherwise NIAGA-54 piece 3c (`UpdateOrderStatus`), filed as its own key the way 205 was.
+
+## 2026-09-03 state (superseded above)
 
 - **Repo:** `main` @ `03d9096`. Module path is `github.com/niaga-labs/lib-common` since NIAGA-103 (2026-09-03); the
   `replace` for `lib-common` still points at the local `../lib-common`.

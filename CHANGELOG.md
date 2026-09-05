@@ -5,6 +5,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — README with the subject > publisher > consumers table (NIAGA-117)
+
+- **`lib-common` had no README at all.** The ticket's done-when is "the README table is complete"; there was
+  no README to complete. One now exists, with the event subject catalog as its centrepiece plus a package
+  index, because a public module with no README is its own gap (public since 2026-09-05).
+- **Every one of the 24 catalog subjects now has a publisher and a consumer, or says here why not.**
+  Measured 2026-09-06 by **two independent methods** — a search for `eventsourcing.<Const>` across every Go
+  file in the workspace, and a literal search for each subject *string* in every tracked file of every repo,
+  frontends included. The two agree.
+- **Three rows are not a simple pair, and each is now written down rather than left to be re-derived:**
+  - `events.inventory.stock.updated` has **two** publishers — service-inventory *and* service-order, both
+    correctly through the outbox. Not to be confused with NIAGA-178, a separate bare-subject publish in
+    service-order that bypasses the outbox and reaches nobody.
+  - The two `events.marketplace.sync.*` subjects have a publisher and **no consumer**. Real events on the
+    wire that nothing subscribes to — not a defect, and not the same as Reserved.
+  - `events.customer.created` and `events.agent.commission.paid` are **Reserved**: declared, never published,
+    never consumed, appearing nowhere in the workspace but `catalog.go`.
+- **The two Reserved subjects were KEPT, not removed** — the ticket allowed either. Nothing imports them so
+  deletion would be safe, but they name planned work (service-customer exists; service-agent is
+  legacy-hidden rather than deleted) and the constant is the only surviving record of that intent. Deleting
+  costs that and saves nothing; keeping it cheap to remove later.
+- **A fourth category the ticket did not name is documented too:** four subjects are routed and handled in
+  `service-notification/internal/events/template_router.go` with **no catalog entry, no publisher and no
+  consumer** — `events.user.email_verification_requested` and the three `events.cart.abandoned*`. A reader
+  would reasonably conclude cart-abandonment email works. It cannot.
+- `catalog.go` carries the same facts at the declarations, so someone reading the constants sees them
+  without opening the README.
+- Tests: **81 pass, 0 fail** in this repo (unchanged — this is documentation and comments).
+  `go build ./...` and `go vet ./...` clean.
+
+
 ### Added — auth.NewInternalHTTPClient, the calling half of the guard (NIAGA-114)
 
 - The service clients that call `/internal/*` build requests in a dozen places each, mostly through
