@@ -5,6 +5,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — events.customer.back_in_stock (NIAGA-123)
+
+- **The subject, its payload and its tests**, so the two repos that publish and consume it have something to
+  build against. This is the `lib-common` third of NIAGA-123; service-customer publishes it and
+  service-notification consumes it, in that order.
+- **It is downstream of `events.inventory.product.restocked`, not a duplicate.** Inventory says a product came
+  back; this says a *named customer asked to be told*. The subscription lookup between the two belongs to
+  service-customer, so notification never has to know what a subscription is.
+- **`CustomerBackInStockPayload` carries everything the email needs** — customer, product, variant, quantity —
+  so the consumer never queries another service. A notification consumer that has to look things up fails
+  when the other service is down, and produces an email nobody can explain afterwards. The publisher already
+  has all of it in hand at the moment it matches the subscription.
+- **The wire shape is pinned, not the Go struct** (`~/.claude/rules/go.md`). `TestBackInStockEmitsEveryRequiredKey`
+  marshals a populated payload and checks the keys the template depends on; `omitempty` on a required field
+  is the bug, because a consumer cannot tell *absent* from *empty*.
+- **A zero `stock_quantity` survives.** Zero is meaningful here — the restock that triggered the email has
+  already sold out again — and is different from no quantity at all. `omitempty` on that int would erase
+  exactly that case.
+- **The variant fields really are omitted when absent**, rather than emitted empty: an empty string renders as
+  a blank line in a template instead of being skipped by it.
+- **`TestNewSubjectsAreRegisteredInSubjectDomains`** closes a gap NIAGA-117 documented but did not guard: a
+  subject declared and left out of `SubjectDomains` is invisible to anything walking the catalog. Go cannot
+  enumerate a package's constants, so it checks the recent subjects rather than claiming to be exhaustive —
+  the README table remains the exhaustive record.
+- The README table gains the row, marked **landing** rather than Reserved: Reserved means nobody intends to
+  build it; this one is mid-build, and the note says to delete the marker once NIAGA-123 closes. A subject
+  stuck between *declared* and *published* is exactly how the four orphaned `events.cart.*` entries happened.
+- Tests: **86 pass, 0 fail** (was 81) — 5 new. `go build ./...` and `go vet ./...` clean.
+
+
 ### Added — README with the subject > publisher > consumers table (NIAGA-117)
 
 - **`lib-common` had no README at all.** The ticket's done-when is "the README table is complete"; there was

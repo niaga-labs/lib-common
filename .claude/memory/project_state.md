@@ -7,6 +7,34 @@ metadata:
 
 ## 2026-09-06 state (resume here)
 
+- **Repo:** `main`, branch `feat/NIAGA-123-back-in-stock-subject`. Public since 2026-09-05.
+- **This unit is ONE THIRD of NIAGA-123**, and the order matters: lib-common declares
+  `events.customer.back_in_stock`, **service-customer** then publishes it through an outbox it does not yet
+  have, and **service-notification** consumes it with a template. Merge libs → services.
+- **Verified:** `gofmt` clean on both files touched, `go build ./...` and `go vet ./...` clean,
+  `go test ./... -count=1` **86 pass / 0 fail** (was 81), 5 new.
+- **IF YOU ARE PICKING THIS UP MID-CHAIN**, the README table row is marked *(NIAGA-123, landing)* on both
+  the publisher and consumer columns. That marker is the state: it means declared, not yet wired at either
+  end. Delete the parentheses when both halves are merged. A subject stuck between declared and published is
+  precisely how the four orphaned `events.cart.*` entries happened.
+- **The subject is DOWNSTREAM of `events.inventory.product.restocked`, not a duplicate.** Inventory says a
+  product came back; this says a named customer asked to be told. The subscription lookup between them is
+  service-customer's job, so notification never learns what a subscription is.
+- **The payload is deliberately self-contained** — customer, product, variant, quantity — so the consumer
+  never queries another service. A consumer that looks things up fails when the other service is down.
+- **What service-customer needs next, measured:** it has a `*gorm.DB` and NATS wiring but **no outbox and no
+  publisher at all** — only `internal/events/subscriber.go`. The no-op to replace is
+  `SimpleNotificationClient.SendBackInStockNotification` (subscriber.go:327), whose own TODO proposes an HTTP
+  call to service-notification; the ticket forbids that, and correctly — notification has no API. The restock
+  path at subscriber.go:255-285 already assembles the full payload, so the change is swapping the no-op for
+  an enqueue. Model the publisher on service-support's `internal/events/publisher.go`.
+- **What service-notification needs, measured:** it is declarative — one line in `notificationBindings`
+  (subscriber.go:29), a `template_router.go` entry and a handler. 18 subjects are routed there today.
+- **Recommended next unit:** finish NIAGA-123 — service-customer, then service-notification, then the
+  end-to-end: restock a seeded product on the stack and watch Mailpit (localhost:8025).
+
+## 2026-09-06 state (NIAGA-117, superseded above)
+
 - **Repo:** `main`, branch `feat/NIAGA-117-subject-catalog`. Module `github.com/niaga-labs/lib-common`,
   **public** since 2026-09-05.
 - **This unit (NIAGA-117): the subject catalog is documented and audited.** New `README.md` (the repo had

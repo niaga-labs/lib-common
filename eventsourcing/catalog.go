@@ -55,6 +55,16 @@ const (
 	// Deleting costs that and saves nothing. Re-check before publishing either:
 	// a subject with no consumer is a message into a void, and the marketplace
 	// pair below is already in that state.
+	// SubjectCustomerBackInStock is published by service-customer when a restock
+	// matches a customer's back-in-stock subscription, and consumed by
+	// service-notification to send the email (NIAGA-123).
+	//
+	// It is DOWNSTREAM of SubjectInventoryProductRestocked, not a duplicate of it:
+	// inventory says a product came back; this says a named customer asked to be
+	// told. The subscription lookup between the two is service-customer's job, so
+	// notification never has to know what a subscription is.
+	SubjectCustomerBackInStock = "events.customer.back_in_stock"
+
 	SubjectCustomerCreated     = "events.customer.created"
 	SubjectAgentCommissionPaid = "events.agent.commission.paid"
 )
@@ -82,6 +92,7 @@ var SubjectDomains = map[string]string{
 	SubjectSupportTicketResolved:       "support",
 	SubjectMarketplaceSyncCompleted:    "marketplace",
 	SubjectMarketplaceSyncFailed:       "marketplace",
+	SubjectCustomerBackInStock:         "customer",
 	SubjectCustomerCreated:             "customer",
 	SubjectAgentCommissionPaid:         "agent",
 }
@@ -121,6 +132,33 @@ type SupportTicketPayload struct {
 	TicketID   string `json:"ticket_id"`
 	CustomerID string `json:"customer_id,omitempty"`
 	Status     string `json:"status,omitempty"`
+}
+
+// CustomerBackInStockPayload carries everything the email needs, so
+// service-notification never queries a customer or a product.
+//
+// A notification consumer that has to look things up is a consumer that fails
+// when the other service is down, and an email nobody can explain afterwards.
+// The publisher already has all of this in hand at the moment it matches the
+// subscription.
+type CustomerBackInStockPayload struct {
+	SubscriptionID string `json:"subscription_id"`
+	CustomerID     string `json:"customer_id"`
+	CustomerEmail  string `json:"customer_email"`
+	CustomerName   string `json:"customer_name,omitempty"`
+	ProductID      string `json:"product_id"`
+	ProductName    string `json:"product_name"`
+	ProductSlug    string `json:"product_slug,omitempty"`
+	ProductImage   string `json:"product_image,omitempty"`
+
+	// The variant fields are omitempty because a product without variants has
+	// none, and an empty string in the template renders as a blank line rather
+	// than being skipped.
+	VariantID   string `json:"variant_id,omitempty"`
+	VariantSKU  string `json:"variant_sku,omitempty"`
+	VariantName string `json:"variant_name,omitempty"`
+
+	StockQuantity int `json:"stock_quantity"`
 }
 
 type MarketplaceSyncPayload struct {
