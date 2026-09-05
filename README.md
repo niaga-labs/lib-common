@@ -70,10 +70,26 @@ Publisher and consumer are read from where the constant is used — `internal/ev
 | `events.support.ticket.created` | service-support | service-notification |
 | `events.support.ticket.replied` | service-support | service-notification |
 | `events.support.ticket.resolved` | service-support | service-notification |
+| `events.customer.back_in_stock` | service-customer *(NIAGA-123, landing)* | service-notification *(NIAGA-123, landing)* |
 | `events.marketplace.sync.completed` | service-marketplace | **none** |
 | `events.marketplace.sync.failed` | service-marketplace | **none** |
 | `events.customer.created` | **none — Reserved** | none |
 | `events.agent.commission.paid` | **none — Reserved** | none |
+
+### `events.customer.back_in_stock` is declared ahead of both its ends
+
+Added by **NIAGA-123**. At the moment this row appeared, nothing published it and
+nothing consumed it — the publisher (service-customer) and the consumer (service-notification) land in the
+same ticket, in the two repos that follow this one in the merge order.
+
+It is **not Reserved**: Reserved means nobody intends to build it. This one is mid-build, and the row says
+which ticket to blame if it is still marked *landing* long after NIAGA-123 closed. **If you are reading this
+and NIAGA-123 is Done, check both ends and delete the parentheses** — a subject stuck between "declared" and
+"published" is the exact state that produced the four orphaned `events.cart.*` entries below.
+
+It is downstream of `events.inventory.product.restocked`, not a duplicate: inventory says a product came
+back, this says a *named customer asked to be told*. The subscription lookup between the two is
+service-customer's job, so notification never has to know what a subscription is.
 
 ### The three rows that are not a simple pair
 

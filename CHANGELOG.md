@@ -5,6 +5,44 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — events.customer.back_in_stock (NIAGA-123)
+
+- **The subject, its payload and its tests**, so the two repos that publish and consume it have something to
+  build against. This is the `lib-common` third of NIAGA-123; service-customer publishes it and
+  service-notification consumes it, in that order.
+- **It is downstream of `events.inventory.product.restocked`, not a duplicate.** Inventory says a product came
+  back; this says a *named customer asked to be told*. The subscription lookup between the two belongs to
+  service-customer, so notification never has to know what a subscription is.
+- **`CustomerBackInStockPayload` carries everything the email needs** — customer, product, variant, quantity —
+  so the consumer never queries another service. A notification consumer that has to look things up fails
+  when the other service is down, and produces an email nobody can explain afterwards. The publisher already
+  has all of it in hand at the moment it matches the subscription.
+- **The wire shape is pinned, not the Go struct** (`~/.claude/rules/go.md`). `TestBackInStockEmitsEveryRequiredKey`
+  marshals a populated payload and checks the keys the template depends on; `omitempty` on a required field
+  is the bug, because a consumer cannot tell *absent* from *empty*.
+- **A zero `stock_quantity` survives.** Zero is meaningful here — the restock that triggered the email has
+  already sold out again — and is different from no quantity at all. `omitempty` on that int would erase
+  exactly that case.
+- **The variant fields really are omitted when absent**, rather than emitted empty: an empty string renders as
+  a blank line in a template instead of being skipped by it.
+- **`ProductURL` carries the full call-to-action link**, built by the publisher — the convention every other
+  templated email here follows (`reset_url`, `verification_url`, `cart_url`). Handing over only a slug would
+  make service-notification own the storefront's base URL *and* its `/products/:slug` pattern, so a route
+  change would have to be made in a service with nothing to do with the storefront. Raised in review, and
+  decided **now** rather than later: service-customer has no storefront base URL configured yet, so adding
+  the field after its publisher was built would mean reworking a pinned wire shape.
+- **`TestEverySubjectIsRegisteredInSubjectDomains` parses `catalog.go`'s own source** rather than checking a
+  hand-maintained list. A list carries the identical flaw it is meant to catch — a subject added next month
+  and left out of the *list* is exactly as invisible as one left out of the map. Mutation-checked: removing
+  the `SubjectDomains` entry makes it fail by name. It also refuses to pass on a parse that found nothing.
+- The new subject sits **above** the `RESERVED` block under its own `IN PROGRESS — NIAGA-123` header. The
+  first draft spliced it *inside* that block, so a reader skimming headers would have read it as Reserved —
+  the opposite of the truth. Caught in review.
+- The README table gains the row, marked **landing** rather than Reserved: Reserved means nobody intends to
+  build it; this one is mid-build, and the note says to delete the marker once NIAGA-123 closes. A subject
+  stuck between *declared* and *published* is exactly how the four orphaned `events.cart.*` entries happened.
+- Tests: **87 pass, 0 fail** (was 81) — 6 new. `go build ./...` and `go vet ./...` clean.
+
 ### Added — README with the subject > publisher > consumers table (NIAGA-117)
 
 - **`lib-common` had no README at all.** The ticket's done-when is "the README table is complete"; there was
