@@ -5,6 +5,52 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — README with the subject > publisher > consumers table (NIAGA-117)
+
+- **`lib-common` had no README at all.** The ticket's done-when is "the README table is complete"; there was
+  no README to complete. One now exists, with the event subject catalog as its centrepiece plus a package
+  index, because a public module with no README is its own gap (public since 2026-09-05).
+- **Every one of the 24 catalog subjects now has a publisher and a consumer, or says here why not.**
+  Measured 2026-09-06 by **two independent methods** — a search for `eventsourcing.<Const>` across every Go
+  file in the workspace, and a literal search for each subject *string* in every tracked file of every repo,
+  frontends included. The two agree.
+- **Three rows are not a simple pair, and each is now written down rather than left to be re-derived:**
+  - `events.inventory.stock.updated` has **two** publishers — service-inventory *and* service-order, both
+    correctly through the outbox. Not to be confused with NIAGA-178, a separate bare-subject publish in
+    service-order that bypasses the outbox and reaches nobody.
+  - The two `events.marketplace.sync.*` subjects have a publisher and **no consumer**. Real events on the
+    wire that nothing subscribes to — not a defect, and not the same as Reserved.
+  - `events.customer.created` and `events.agent.commission.paid` are **Reserved**: declared, never published,
+    never consumed, appearing nowhere in the workspace but `catalog.go`.
+- **The two Reserved subjects were KEPT, not removed** — the ticket allowed either. Nothing imports them so
+  deletion would be safe, but they name planned work (service-customer exists; service-agent is
+  legacy-hidden rather than deleted) and the constant is the only surviving record of that intent. Deleting
+  costs that and saves nothing; keeping it cheap to remove later.
+- **A fourth category the ticket did not name is documented too:** four subjects are routed and handled in
+  `service-notification/internal/events/template_router.go` with **no catalog entry, no publisher and no
+  consumer** — `events.user.email_verification_requested` and the three `events.cart.abandoned*`. A reader
+  would reasonably conclude cart-abandonment email works. It cannot.
+- `catalog.go` carries the same facts at the declarations, so someone reading the constants sees them
+  without opening the README.
+- **A count in the first draft was wrong and review caught it.** The README said lib-common is "consumed by
+   the eight Go services". It is **ten** — every `service-*` repo carries the `replace` directive. The "eight"
+   is the number of services with a **CI workflow** (`service-marketplace` and `service-support` have none),
+   which is the phrasing the workspace's `ci-known-red.txt` uses. Two different sets, one number; both are
+   now stated so the conflation does not recur. Fitting error for a document whose premise is "measured, not
+   assumed" — it was the one line in it that wasn't.
+- **A second stale fact of my own, found while checking the review's reasoning.** The first draft described
+  **NIAGA-178** in the present tense — "a bare-subject publish in service-order that bypasses the outbox and
+  reaches nobody". It is **fixed and Done**: no bare publish remains anywhere in service-order, and the code
+  carries a comment saying what it used to do. Corrected to the past tense, and kept in the README rather
+  than dropped, because "service-order publishes stock.updated" is true both before and after the fix — only
+  the subject told them apart.
+- **This repo's own `CLAUDE.md` was stale in three places** and is corrected here, since the parent epic is
+  literally *Docs tell the truth*: it said `CHANGELOG.md` "does not exist yet" (it does), listed **NIAGA-69**
+  as blocked on an owner decision (Done — this repo went public on 2026-09-05), and counted **6** test files
+  (there are **10**).
+- Tests: **81 pass, 0 fail** in this repo (unchanged — this is documentation and comments).
+  `go build ./...` and `go vet ./...` clean.
+
 ### Added — auth.NewInternalHTTPClient, the calling half of the guard (NIAGA-114)
 
 - The service clients that call `/internal/*` build requests in a dozen places each, mostly through

@@ -2,6 +2,11 @@ package eventsourcing
 
 // Canonical NATS event subjects. Phase 10 removes the legacy subjects from
 // service code after every publisher and durable consumer has migrated here.
+//
+// EVERY SUBJECT HERE HAS A PUBLISHER AND A CONSUMER, OR SAYS WHY NOT. The full
+// subject > publisher > consumers table is in README.md and was measured rather
+// than assumed (NIAGA-117). Two subjects are Reserved and two are published with
+// no consumer; both cases are commented where they are declared.
 const (
 	SubjectUserRegistered             = "events.user.registered"
 	SubjectUserPasswordResetRequested = "events.user.password_reset_requested"
@@ -29,9 +34,27 @@ const (
 	SubjectSupportTicketReplied  = "events.support.ticket.replied"
 	SubjectSupportTicketResolved = "events.support.ticket.resolved"
 
+	// PUBLISHED BY service-marketplace, CONSUMED BY NOBODY (audited 2026-09-06,
+	// NIAGA-117). Not a defect and not reserved — these are real events on the
+	// wire that no service subscribes to yet. Recorded here so the next reader
+	// does not have to grep for a consumer that does not exist.
 	SubjectMarketplaceSyncCompleted = "events.marketplace.sync.completed"
 	SubjectMarketplaceSyncFailed    = "events.marketplace.sync.failed"
 
+	// RESERVED — DECLARED, NEVER PUBLISHED, NEVER CONSUMED (NIAGA-117).
+	//
+	// Audited 2026-09-06 across every repo in the workspace, by two independent
+	// methods: a search for `eventsourcing.<Const>` in all Go files, and a
+	// literal search for the subject STRING in every tracked file of every repo,
+	// frontends included. Both agree — these two appear NOWHERE but this file.
+	//
+	// Kept rather than deleted, deliberately. Nothing imports them, so removing
+	// them would be safe today; but they name work that is planned rather than
+	// abandoned (service-customer exists, service-agent is legacy-hidden rather
+	// than deleted), and the name is the only surviving record of the intent.
+	// Deleting costs that and saves nothing. Re-check before publishing either:
+	// a subject with no consumer is a message into a void, and the marketplace
+	// pair below is already in that state.
 	SubjectCustomerCreated     = "events.customer.created"
 	SubjectAgentCommissionPaid = "events.agent.commission.paid"
 )
