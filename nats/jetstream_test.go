@@ -52,6 +52,7 @@ func TestDefaultStreamsIncludePerDomainEventStreams(t *testing.T) {
 		"EVENTS_CATALOG":     "events.catalog.>",
 		"EVENTS_SUPPORT":     "events.support.>",
 		"EVENTS_MARKETPLACE": "events.marketplace.>",
+		"EVENTS_CUSTOMER":    "events.customer.>",
 	}
 
 	for _, stream := range DefaultStreams {

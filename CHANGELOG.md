@@ -5,6 +5,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — EVENTS_CUSTOMER, without which the subject declared last commit had nowhere to land (NIAGA-123)
+
+- **`events.customer.back_in_stock` was declared with no stream to carry it.** `DefaultStreams` had six
+  entries — user, order, inventory, catalog, support, marketplace — and **nothing matched
+  `events.customer.>`**. Confirmed against the *running* NATS, not just the source: `/jsz` listed exactly
+  those six.
+- **That is a loud failure, not a silent one, and the difference matters.** `publish()` uses
+  `js.PublishMsg`, which waits for a stream to acknowledge. With no stream, service-customer's outbox row is
+  written and then **never leaves the outbox** — the processor fails and retries it forever. No data is
+  lost; nothing is delivered either.
+- **It was a real gap between two merged commits.** The subject landed in `46dc5ce` and the publisher in
+  service-customer's `14e426e`; from then until this entry, a restock would have produced an undeliverable
+  outbox row. Found by checking the stream *before* writing the consumer, which is the order that catches it.
+- The test's expected-stream map gains the entry, and it was **mutation-checked**: removing the stream makes
+  it fail with `missing default stream EVENTS_CUSTOMER`.
+- The comment on the new entry records both halves of the failure mode, because only one of them is loud: a
+  **missing stream errors**, while a **consumer bound to a subject nothing publishes is a healthy consumer
+  that never fires** (NIAGA-116).
+- Tests: **87 pass, 0 fail** — unchanged in count; the new assertion extends an existing test.
+
+
 ### Added — events.customer.back_in_stock (NIAGA-123)
 
 - **The subject, its payload and its tests**, so the two repos that publish and consume it have something to
