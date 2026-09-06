@@ -5,6 +5,46 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security — pgx bumped to v5.9.2: two memory-safety criticals and a SQL injection (NIAGA-173)
+
+- `github.com/jackc/pgx/v5` **v5.5.5 → v5.9.2**. It is marked `// indirect` — it comes in under
+  `gorm.io/driver/postgres v1.5.9` — but it is the driver that actually talks to Postgres, so it is on the
+  data path of every service that uses this library.
+- **Three advisories, not the two the ticket named**, and the third moved the target version:
+  two memory-safety criticals fixed in **5.9.0**, and *SQL injection via placeholder confusion with dollar
+  quoting* fixed in **5.9.2**. Stopping at 5.9.0 would have cleared both criticals and left the injection
+  open. Its GitHub severity is *low*; that label decided nothing here.
+- **The bump is wider than pgx, and every part of it is `go mod tidy`'s own resolution — nothing hand-edited.**
+  What actually changed in **this** repo's `go.mod`, read off the diff rather than assumed:
+  - `jackc/pgservicefile` v0.0.0-20221227161230-091c0ba34f0a → v0.0.0-20240606120523-5a60cdf6a761
+  - `jackc/pgx/v5` v5.5.5 → v5.9.2
+  - `jackc/puddle/v2` v2.2.1 → v2.2.2
+  - `x/sync` v0.12.0 → v0.17.0
+  - `x/text` v0.23.0 → v0.29.0
+  - `go` directive **1.24.0 → 1.25.0**, because pgx v5.9.2 declares `go 1.25.0`.
+- **The versions above are this repo's, not a house number.** pgx v5.9.2's own `go.mod` sets a *floor*
+  (`testify v1.11.1`, `pgservicefile`, `puddle/v2 v2.2.2`, `x/sync v0.17.0`, `x/text v0.29.0`); what each
+  module actually ends up with is whatever MVS resolves across its whole graph, and the repos here differ.
+  *An earlier draft of this entry restated pgx's floor as if it were what happened everywhere. It was wrong in
+  ten of the eleven repos — claiming dependencies this module does not have, versions that did not move, and
+  numbers that did not match `go.mod`. Review caught it; these are now generated from each repo's own diff.*
+- **The `go` directive is the part with teeth.** This repo has **no CI of its own** — no `.github/workflows` at all, which `ci-known-red.txt`
+  already records — so the toolchain bump is settled by the nine services whose `Test` job passes on the
+  matching branch, and locally here by `go build`, `go vet` and the test run below.
+- No code changed. `go build ./...` and `go vet ./...` exit 0; `go test ./...` passes **98 tests, 0 failures**
+  (76 top-level functions) across **6 of 17** packages — `auth`, `domain`, `eventsourcing`, `nats`, `outbox`,
+  `response`. *An earlier draft said "5 of 15" and omitted `auth`. Both numbers were read off a `tail -15` of
+  the test output, which had cut the first two lines — a count taken from truncated output is not a count.
+  Review caught it.*
+- `gofmt -l .` reports 7 files, **all pre-existing** — the identical 7 on `origin/main`, checked by restoring
+  that content and re-running, not assumed. NIAGA-34's debt, deliberately untouched.
+- **What this does NOT prove.** Nothing here opens a real Postgres connection through
+  `gorm.Open(postgres.Open(...))`, and no `.go` file in any of the eleven repos imports `jackc/pgx` directly
+  (checked by grep). The gorm → pgx → Postgres path is verified by compilation, not a live round-trip.
+- **This repo's own Dependabot feed lists no pgx advisory at all**, unlike the other ten, though alerts are
+  enabled here (`vulnerability-alerts` → 204). The 5.9.2 target comes from those ten, not from this repo's
+  own feed — said plainly rather than implying it was confirmed here.
+
 ### Fixed — the internal-token guard knew about one published placeholder and accepted the other (NIAGA-216)
 
 - **The value the documented setup actually produces was accepted.** `ResolveInternalToken` refused exactly
