@@ -5,6 +5,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — the internal-token guard knew about one published placeholder and accepted the other (NIAGA-216)
+
+- **The value the documented setup actually produces was accepted.** `ResolveInternalToken` refused exactly
+  two things outside development: an empty token, and `dev-internal-token` — with error text saying why,
+  "that value is published in every .env.example". But `infra-platform/.env.example` line 57 does not ship
+  that value. It ships `INTERNAL_API_TOKEN=CHANGE_ME_GENERATE_WITH_openssl_rand_base64_32`, which is what an
+  operator gets by copying that file and running `docker compose up` without editing the line. Equally
+  published, equally guessable, accepted.
+- **Measured, not reasoned about.** With `APP_ENV=production`: empty → refused, `dev-internal-token` →
+  refused, the CHANGE_ME value → **booted, `/health` 200, no panic**. The failure mode was the exact one the
+  guard exists to prevent, with every check reporting healthy, across all five token-consuming services
+  (catalog, inventory, order, agent, marketplace).
+- **The root cause is two placeholder conventions and one guard that knew about one of them.** The service
+  `.env.example` files use `dev-internal-token`; the compose `.env.example` uses `CHANGE_ME_…`. So the fix is
+  not another literal: `PlaceholderPrefix` (`CHANGE_ME`, matched case-insensitively) covers that whole
+  convention, and generalises to `POSTGRES_PASSWORD`, `JWT_SECRET`, `MARKETPLACE_ENCRYPTION_KEY` and
+  `MINIO_ROOT_PASSWORD` if they ever grow guards of their own.
+- **A length floor as well, because a list only catches what somebody was already bitten by.**
+  `MinInternalTokenLength` is 24. `openssl rand -base64 32` — what every `.env.example` tells the operator to
+  run — produces 44 characters, so nothing generated for this purpose is near the floor, and anything under it
+  is a placeholder somebody typed. Both new refusals name the problem and the fix, the way the existing two do.
+- **The existing two refusals are byte-for-byte unchanged**, and development still accepts every placeholder —
+  treating an unset `APP_ENV` as development is deliberate so a fresh clone runs with no setup (NIAGA-210).
+
 ### Fixed — EVENTS_CUSTOMER, without which the subject declared last commit had nowhere to land (NIAGA-123)
 
 - **`events.customer.back_in_stock` was declared with no stream to carry it.** `DefaultStreams` had six
