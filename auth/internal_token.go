@@ -33,10 +33,32 @@ const (
 	// InternalTokenEnvVar is where every service reads it from.
 	InternalTokenEnvVar = "INTERNAL_API_TOKEN"
 
-	// DevInternalToken is the value .env.example ships, and the only value this
-	// package will invent for you. It is a placeholder by design and is refused
-	// outside development.
+	// DevInternalToken is the value the SERVICE .env.example files ship, and the
+	// only value this package will invent for you. It is a placeholder by design
+	// and is refused outside development.
 	DevInternalToken = "dev-internal-token" // secret-scan: allow
+
+	// PlaceholderInternalToken is the value infra-platform/.env.example ships —
+	// the compose stack uses a different placeholder convention from the service
+	// .env.example files, and for a while the guard below knew about only one of
+	// them (NIAGA-216). Copying that file and running docker compose up without
+	// editing this line is the shortest path to a production-mode stack on a
+	// token anyone can read off GitHub.
+	PlaceholderInternalToken = "CHANGE_ME_GENERATE_WITH_openssl_rand_base64_32" // secret-scan: allow
+
+	// PlaceholderPrefix is the convention infra-platform/.env.example uses for
+	// every value the operator must replace: POSTGRES_PASSWORD, JWT_SECRET,
+	// MARKETPLACE_ENCRYPTION_KEY, MINIO_ROOT_PASSWORD and the token above. It is
+	// matched as a case-insensitive prefix so a guard on any of the others gets
+	// the same rule for free.
+	PlaceholderPrefix = "CHANGE_ME"
+
+	// MinInternalTokenLength is the shortest token accepted outside development.
+	// Every .env.example tells the operator to run `openssl rand -base64 32`,
+	// which produces 44 characters; nothing generated for this purpose is short.
+	// The floor exists because a list of known placeholders only ever catches the
+	// ones somebody has already been bitten by.
+	MinInternalTokenLength = 24
 )
 
 // InternalToken returns middleware requiring InternalTokenHeader to equal
@@ -88,9 +110,14 @@ func IsDevEnv(appEnv string) bool {
 // ResolveInternalToken reads INTERNAL_API_TOKEN.
 //
 // In development it falls back to DevInternalToken so a fresh clone runs with no
-// setup. Anywhere else a missing or placeholder value is an error, and the
-// caller is expected to refuse to start rather than serve these routes with a
-// token anyone can read off GitHub.
+// setup. Anywhere else it refuses, in this order, an empty value, either of the
+// two published placeholders, any other CHANGE_ME_ value, and anything under
+// MinInternalTokenLength — and the caller is expected to refuse to start rather
+// than serve these routes with a token anyone can read off GitHub.
+//
+// The order matters only for the error text: DevInternalToken is 18 characters
+// and would trip the length floor too, but the specific message is the one that
+// tells the operator which file to look in.
 func ResolveInternalToken(appEnv string) (string, error) {
 	token := strings.TrimSpace(os.Getenv(InternalTokenEnvVar))
 
@@ -108,6 +135,18 @@ func ResolveInternalToken(appEnv string) (string, error) {
 	if token == DevInternalToken {
 		return "", fmt.Errorf("%s is set to the development placeholder while APP_ENV=%q; "+
 			"that value is published in every .env.example", InternalTokenEnvVar, appEnv)
+	}
+	if strings.HasPrefix(strings.ToUpper(token), PlaceholderPrefix) {
+		return "", fmt.Errorf("%s still holds a %s_ placeholder while APP_ENV=%q; "+
+			"infra-platform/.env.example ships %s=%s and docker compose passes it through "+
+			"unedited, so it is as published as any other value in the repo",
+			InternalTokenEnvVar, PlaceholderPrefix, appEnv, InternalTokenEnvVar, PlaceholderInternalToken)
+	}
+	if len(token) < MinInternalTokenLength {
+		return "", fmt.Errorf("%s is %d characters while APP_ENV=%q; the internal routes require "+
+			"at least %d, because anything shorter is a placeholder somebody typed rather than a "+
+			"secret something generated — use `openssl rand -base64 32`",
+			InternalTokenEnvVar, len(token), appEnv, MinInternalTokenLength)
 	}
 
 	return token, nil
