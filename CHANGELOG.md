@@ -5,6 +5,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security — golang-jwt bumped: unauthenticated memory exhaustion via the Authorization header (NIAGA-173)
+
+- What changed in **this** repo's `go.mod`, read off the diff:
+  - `golang-jwt/jwt/v5` v5.2.1 → v5.2.2
+- **GHSA: "jwt-go allows excessive memory allocation during header parsing" — HIGH, CVSS 7.5**, affecting
+  `>= 5.0.0-rc.1, < 5.2.2`. `parser.ParseUnverified` splits untrusted input on periods, so an
+  `Authorization: Bearer` value made of many periods allocates without bound.
+- **This is worse than the pgx advisory fixed alongside it.** pgx needed a database path. This one is
+  triggered by *any* unauthenticated HTTP request that reaches the auth middleware, because the middleware
+  must parse the header before it can know who is calling — there is no credential to check first.
+- **Reachable here directly**: `.go` files in this repo import `golang-jwt/jwt/v5`.
+- No code changed — the diff is `go.mod` and `go.sum`. `go build ./...` and `go vet ./...` exit 0.
+  `go test ./...` passes **98 tests, 0 failures**. This repo has no `.github/workflows`, so its own CI settles nothing; the seven services with a
+  workflow verify the same bump.
+
 ### Security — pgx bumped to v5.9.2: two memory-safety criticals and a SQL injection (NIAGA-173)
 
 - `github.com/jackc/pgx/v5` **v5.5.5 → v5.9.2**. It is marked `// indirect` — it comes in under
