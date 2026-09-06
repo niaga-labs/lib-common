@@ -117,6 +117,36 @@ var DefaultStreams = []StreamConfig{
 		MaxBytes:    50 * 1024 * 1024,
 		Replicas:    1,
 	},
+	{
+		// A SUBJECT WITH NO STREAM IS NOT DELIVERED, AND THE PUBLISH FAILS
+		// (NIAGA-123). publish() uses js.PublishMsg, which waits for a stream to
+		// acknowledge; nothing captured events.customer.> until this entry, so
+		// events.customer.back_in_stock could be enqueued in the outbox and then
+		// never leave it.
+		//
+		// Such a row is retried INDEFINITELY, and it is worth knowing which query
+		// makes that true: processBatch selects on GetUnprocessedEvents, whose
+		// filter is only `processed_at IS NULL` — no retry cap. The capped path,
+		// GetFailedEvents (retry_count < MaxRetries), is a SECOND, supplementary
+		// attempt in the same tick. So the cap limits the extra attempt and never
+		// the base one. (Both selecting the same row is NIAGA-207.)
+		//
+		// That is the loud half of the failure. The quiet half is the one to
+		// remember: a consumer bound to a subject nothing publishes is a HEALTHY
+		// consumer that never fires (NIAGA-116). A missing stream errors; a
+		// missing publisher does not.
+		Name:        "EVENTS_CUSTOMER",
+		Description: "Customer lifecycle events — back-in-stock notifications, and whatever follows",
+		Subjects:    []string{"events.customer.>"},
+		// 30 days, matching EVENTS_USER rather than EVENTS_MARKETPLACE's 3. A
+		// back-in-stock event is the only record that a named customer asked to
+		// be told about a product; losing one is losing that request, not losing
+		// a sync that will happen again on the next tick.
+		MaxAge:   30 * 24 * time.Hour,
+		MaxMsgs:  50000,
+		MaxBytes: 50 * 1024 * 1024,
+		Replicas: 1,
+	},
 }
 
 // NewJetStreamClient creates a new JetStream client with retry logic

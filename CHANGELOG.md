@@ -5,6 +5,44 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — EVENTS_CUSTOMER, without which the subject declared last commit had nowhere to land (NIAGA-123)
+
+- **`events.customer.back_in_stock` was declared with no stream to carry it.** `DefaultStreams` had six
+  entries — user, order, inventory, catalog, support, marketplace — and **nothing matched
+  `events.customer.>`**. Confirmed against the *running* NATS, not just the source: `/jsz` listed exactly
+  those six.
+- **That is a loud failure, not a silent one, and the difference matters.** `publish()` uses
+  `js.PublishMsg`, which waits for a stream to acknowledge. With no stream, service-customer's outbox row is
+  written and then **never leaves the outbox**. No data is lost; nothing is delivered either.
+- **On "retries forever" — review said that was wrong, and checking showed it right for a different
+  reason.** The retry cap (`MaxRetries`, 5) lives on `GetFailedEvents`. The *main* loop uses
+  `GetUnprocessedEvents`, whose filter is only `processed_at IS NULL` — **no cap at all** — so a failing row
+  is re-attempted every tick indefinitely; the cap only ever limited the *supplementary* attempt. Worth
+  getting right, because "stops after 5 and is silently stranded" and "hammers forever" call for opposite
+  fixes. Both queries selecting the same row in one tick is now recorded on **NIAGA-207**.
+- **It was a real gap between two merged commits.** The subject landed in `46dc5ce` and the publisher in
+  service-customer's `14e426e`; from then until this entry, a restock would have produced an undeliverable
+  outbox row. Found by checking the stream *before* writing the consumer, which is the order that catches it.
+- The test's expected-stream map gains the entry, and it was **mutation-checked**: removing the stream makes
+  it fail with `missing default stream EVENTS_CUSTOMER`.
+- The comment on the new entry records both halves of the failure mode, because only one of them is loud: a
+  **missing stream errors**, while a **consumer bound to a subject nothing publishes is a healthy consumer
+  that never fires** (NIAGA-116).
+- **`TestEverySubjectDomainHasAStream` derives the check from `eventsourcing.SubjectDomains`** instead of a
+  second hand-written list. The map-based test is a fine guard for the entries it names, but it carries the
+  flaw it exists to catch: a domain added next month and left out of *that list* is exactly as invisible as
+  one left out of `DefaultStreams`. It keeps an explicit exception for `agent` — Reserved, never published
+  (NIAGA-117) — so whoever un-reserves that subject must add the stream or justify the exception, rather
+  than discovering it the way this ticket did.
+- **The map-based test caught a real mistake within minutes of the new one being written.** Adding the
+  `MaxAge` rationale comment, my edit **dropped the `Subjects:` line** — leaving a stream that captured
+  nothing, which is the precise bug this whole entry is about. `EVENTS_CUSTOMER subjects = [], want
+  [events.customer.>]`. Both tests are worth having: the derived one catches a *missing* stream, the map one
+  catches a *malformed* one.
+- Both were mutation-checked: removing the stream fails each by name.
+- Tests: **88 pass, 0 fail** (was 87) — one new.
+
+
 ### Added — events.customer.back_in_stock (NIAGA-123)
 
 - **The subject, its payload and its tests**, so the two repos that publish and consume it have something to

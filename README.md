@@ -70,7 +70,7 @@ Publisher and consumer are read from where the constant is used — `internal/ev
 | `events.support.ticket.created` | service-support | service-notification |
 | `events.support.ticket.replied` | service-support | service-notification |
 | `events.support.ticket.resolved` | service-support | service-notification |
-| `events.customer.back_in_stock` | service-customer *(NIAGA-123, landing)* | service-notification *(NIAGA-123, landing)* |
+| `events.customer.back_in_stock` | service-customer | service-notification *(NIAGA-123, landing)* |
 | `events.marketplace.sync.completed` | service-marketplace | **none** |
 | `events.marketplace.sync.failed` | service-marketplace | **none** |
 | `events.customer.created` | **none — Reserved** | none |
