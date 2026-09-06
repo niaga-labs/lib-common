@@ -5,6 +5,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security — pgx bumped to v5.9.2: two memory-safety criticals and a SQL injection (NIAGA-173)
+
+- `github.com/jackc/pgx/v5` **v5.5.5 → v5.9.2**. It is marked `// indirect` — it comes in under
+  `gorm.io/driver/postgres v1.5.9` — but it is the driver that actually talks to Postgres, so it is on the
+  data path of every service that uses this library.
+- **Three advisories, not the two the ticket named**, and the third moved the target version:
+  two memory-safety criticals fixed in **5.9.0**, and *SQL injection via placeholder confusion with dollar
+  quoting* fixed in **5.9.2**. Stopping at 5.9.0 would have cleared both criticals and left the injection
+  open. Its GitHub severity is *low*; that label decided nothing here.
+- Carried along by `go mod tidy`, not chosen: `pgservicefile`, `puddle/v2` 2.2.1→2.2.2,
+  `golang.org/x/sync` 0.12.0→0.17.0, `golang.org/x/text` 0.23.0→0.29.0.
+- No code changed. `go build ./...` and `go vet ./...` exit 0; `go test ./...` passes every package that has
+  tests (domain, eventsourcing, nats, outbox, response — 5 of 15; the other 10 have no test files).
+- `gofmt -l .` reports 7 files, **all pre-existing** — the identical 7 on `origin/main`, checked rather than
+  assumed. That is NIAGA-34's lint debt and is deliberately not touched here.
+
 ### Fixed — the internal-token guard knew about one published placeholder and accepted the other (NIAGA-216)
 
 - **The value the documented setup actually produces was accepted.** `ResolveInternalToken` refused exactly
