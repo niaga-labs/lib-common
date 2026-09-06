@@ -14,12 +14,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   two memory-safety criticals fixed in **5.9.0**, and *SQL injection via placeholder confusion with dollar
   quoting* fixed in **5.9.2**. Stopping at 5.9.0 would have cleared both criticals and left the injection
   open. Its GitHub severity is *low*; that label decided nothing here.
-- Carried along by `go mod tidy`, not chosen: `pgservicefile`, `puddle/v2` 2.2.1→2.2.2,
-  `golang.org/x/sync` 0.12.0→0.17.0, `golang.org/x/text` 0.23.0→0.29.0.
-- No code changed. `go build ./...` and `go vet ./...` exit 0; `go test ./...` passes every package that has
-  tests (domain, eventsourcing, nats, outbox, response — 5 of 15; the other 10 have no test files).
-- `gofmt -l .` reports 7 files, **all pre-existing** — the identical 7 on `origin/main`, checked rather than
-  assumed. That is NIAGA-34's lint debt and is deliberately not touched here.
+- **The bump is wider than pgx, and all of it is `go mod tidy`'s doing, not hand-editing.** pgx v5.9.2's own
+  `go.mod` requires exactly what moved: `testify v1.11.1` (a **direct** dependency here, from v1.9.0),
+  `pgservicefile`, `puddle/v2` 2.2.1→2.2.2, `x/sync` 0.12.0→0.17.0, `x/text` 0.23.0→0.29.0 — and
+  **`go 1.24.0 → 1.25.0`**, because pgx v5.9.2 declares `go 1.25.0`. The toolchain bump is the one with
+  teeth; this repo has no CI of its own, so it is proved by the nine services whose `Test` job passes on the
+  matching branch.
+- No code changed. `go build ./...` and `go vet ./...` exit 0; `go test ./...` passes **98 tests, 0 failures**
+  (76 top-level functions) across **6 of 17** packages — `auth`, `domain`, `eventsourcing`, `nats`, `outbox`,
+  `response`. *An earlier draft said "5 of 15" and omitted `auth`. Both numbers were read off a `tail -15` of
+  the test output, which had cut the first two lines — a count taken from truncated output is not a count.
+  Review caught it.*
+- `gofmt -l .` reports 7 files, **all pre-existing** — the identical 7 on `origin/main`, checked by restoring
+  that content and re-running, not assumed. NIAGA-34's debt, deliberately untouched.
+- **What this does NOT prove.** Nothing here opens a real Postgres connection through
+  `gorm.Open(postgres.Open(...))`, and no `.go` file in any of the eleven repos imports `jackc/pgx` directly
+  (checked by grep). The gorm → pgx → Postgres path is verified by compilation, not a live round-trip.
+- **This repo's own Dependabot feed lists no pgx advisory at all**, unlike the other ten, though alerts are
+  enabled here (`vulnerability-alerts` → 204). The 5.9.2 target comes from those ten, not from this repo's
+  own feed — said plainly rather than implying it was confirmed here.
 
 ### Fixed — the internal-token guard knew about one published placeholder and accepted the other (NIAGA-216)
 
