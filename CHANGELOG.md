@@ -22,9 +22,21 @@ exactly what kept this invisible in operation.
 **Why release rather than mark-after-success.** Marking only on success reopens the window that
 mark-first exists to close: two concurrent deliveries of one event would both pass the check and
 both process. Keeping the claim and handing it back on failure preserves that guarantee and
-restores retry. The remaining hole is a process that dies between claiming and releasing, which
-strands that one event — strictly better than the previous behaviour, where **every** handler
-error stranded one, and stated here rather than hidden.
+restores retry.
+
+**The holes that remain — plural.** A first draft of this entry said "the remaining hole" as
+though there were one. (1) A process dying between claiming and releasing strands that one event,
+which is strictly better than the previous behaviour where **every** handler error stranded one.
+(2) `AckWait` expiring while the handler still runs: the redelivery finds the claim, acks, and
+terminates a message the first delivery is still working on — the event is lost and now leaves no
+row behind either. (3) `RouteToDLQ` itself failing, where the caller returns without acking or
+releasing and nothing redelivers. **(2) and (3) predate this change and are not fixed by it**;
+they are written down here because the code now invites the reader to think the claim lifecycle is
+complete.
+
+**Replay from the DLQ needs the claim deleted first**, or a republished event is acked and skipped
+silently. No replay tooling exists in this workspace today — checked — but whoever writes it needs
+to know.
 
 **Not released on the DLQ path.** A dead-lettered event is finished, and its claim is what stops
 it being picked up again.
