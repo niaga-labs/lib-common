@@ -63,6 +63,20 @@ works, which is the property the mark-first design exists to provide.
 
 Probe rows and the temporary constraint were removed afterwards; verified 0 left.
 
+**What the proof actually exercised, stated precisely.** The dedup control was a claim **pre-inserted**
+into `events.processed` before publishing, not a success followed by a forced redelivery. That is the
+identical database state — same `(event_id, consumer_name)` primary key, same `CheckAndMark`
+`RowsAffected == 0` path — so the property is genuinely proved, but it is worth saying which route was
+taken. The other half is proved by the count: **7 deletes for 7 handler failures** means `Release` did
+**not** fire on the successful delivery, so the claim survived it.
+
+**Scope of the proof, at the right granularity.** Four consumer *services* use `IdempotencyChecker`
+(`service-customer`, `service-inventory`, `service-marketplace`, `service-notification`) and all four
+were changed — but in this codebase a "consumer" is the durable name written to
+`events.processed.consumer_name`, and there are **26** of those: inventory 7, notification 14,
+marketplace 4, customer 1. They all share one `dispatch`, so the fix covers all 26; the live run
+exercised **one** (`handleProductCreated`). So: **4 services / 26 durable consumers / 1 proved live.**
+
 ### Security — golang-jwt bumped: unauthenticated memory exhaustion via the Authorization header (NIAGA-173)
 
 - What changed in **this** repo's `go.mod`, read off the diff:
