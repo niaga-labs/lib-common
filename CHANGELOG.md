@@ -5,6 +5,51 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — a failed event handler can be retried again (NIAGA-263)
+
+- `IdempotencyChecker.Release(ctx, eventID, consumerName)` gives back the claim `CheckAndMark`
+  took, and `CheckAndMark`'s doc now says what it actually is: **the row is written BEFORE the
+  handler runs, so it is a CLAIM on the event, not proof the work was done.**
+
+**What was broken, and why nobody saw it.** A handler returned an error, the consumer NAKed,
+JetStream redelivered — and `CheckAndMark` reported "already processed", so the message was
+**acked without the handler ever running again**. Retry was dead. So was the DLQ, for a second
+reason worth stating separately: `NumDelivered` never climbed to the max-deliver threshold,
+because the redelivery never reached the handler-error branch that routes there. Meanwhile the
+consumer logged `"Handler error, will retry"` — a promise the code could not keep, which is
+exactly what kept this invisible in operation.
+
+**Why release rather than mark-after-success.** Marking only on success reopens the window that
+mark-first exists to close: two concurrent deliveries of one event would both pass the check and
+both process. Keeping the claim and handing it back on failure preserves that guarantee and
+restores retry. The remaining hole is a process that dies between claiming and releasing, which
+strands that one event — strictly better than the previous behaviour, where **every** handler
+error stranded one, and stated here rather than hidden.
+
+**Not released on the DLQ path.** A dead-lettered event is finished, and its claim is what stops
+it being picked up again.
+
+#### Proved on the live stack, with the failure created and then removed
+
+`service-inventory` on 8003 against the dev stack, events published through the **real outbox**
+(a row in `outbox.events`; the processor publishes it and uses the row id as `Nats-Msg-Id`), so
+no test-only publishing path was involved. The failure was a temporary `CHECK` constraint on
+`inventory.stock_items` naming one probe product id — a genuine handler error, not a stub.
+
+| what was done | what happened |
+|---|---|
+| publish, constraint in place | **deliveries 1, 2, 3, 4** each re-ran the handler and failed |
+| delivery 5 | **routed to the DLQ**, carrying the real `SQLSTATE 23514` error |
+| publish a second event, then **drop the constraint mid-retry** | it had failed 3 times; the next delivery **succeeded** — `Provisioned stock for new product`, row created |
+| pre-insert a claim for a fresh event, then publish it | handler **did not run**: provisioned count unchanged, no row, no retry lines |
+
+The first row is the whole fix: before it, delivery 1 was the only time the handler ever ran.
+The second row matters as much — the DLQ was **unreachable**, because `NumDelivered` could not
+climb while every redelivery was acked as a duplicate. The last row is the control: dedup still
+works, which is the property the mark-first design exists to provide.
+
+Probe rows and the temporary constraint were removed afterwards; verified 0 left.
+
 ### Security — golang-jwt bumped: unauthenticated memory exhaustion via the Authorization header (NIAGA-173)
 
 - What changed in **this** repo's `go.mod`, read off the diff:
