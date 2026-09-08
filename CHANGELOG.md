@@ -5,6 +5,78 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — a failed event handler can be retried again (NIAGA-263)
+
+- `IdempotencyChecker.Release(ctx, eventID, consumerName)` gives back the claim `CheckAndMark`
+  took, and `CheckAndMark`'s doc now says what it actually is: **the row is written BEFORE the
+  handler runs, so it is a CLAIM on the event, not proof the work was done.**
+
+**What was broken, and why nobody saw it.** A handler returned an error, the consumer NAKed,
+JetStream redelivered — and `CheckAndMark` reported "already processed", so the message was
+**acked without the handler ever running again**. Retry was dead. So was the DLQ, for a second
+reason worth stating separately: `NumDelivered` never climbed to the max-deliver threshold,
+because the redelivery never reached the handler-error branch that routes there. Meanwhile the
+consumer logged `"Handler error, will retry"` — a promise the code could not keep, which is
+exactly what kept this invisible in operation.
+
+**Why release rather than mark-after-success.** Marking only on success reopens the window that
+mark-first exists to close: two concurrent deliveries of one event would both pass the check and
+both process. Keeping the claim and handing it back on failure preserves that guarantee and
+restores retry.
+
+**The holes that remain — plural.** A first draft of this entry said "the remaining hole" as
+though there were one. (1) A process dying between claiming and releasing strands that one event,
+which is strictly better than the previous behaviour where **every** handler error stranded one.
+(2) `AckWait` expiring while the handler still runs: the redelivery finds the claim, acks, and
+terminates a message the first delivery is still working on — the event is lost and now leaves no
+row behind either. (3) `RouteToDLQ` itself failing, where the caller returns without acking or
+releasing and nothing redelivers — note it writes the `events.failed` row **before** terminating
+the message, so on that error the row may well exist and the event be recoverable. **(2) and (3) predate this change and are not fixed by it**;
+they are written down here because the code now invites the reader to think the claim lifecycle is
+complete.
+
+**Replay from the DLQ needs the claim deleted first**, or a republished event is acked and skipped
+silently. No replay tooling exists in this workspace today — checked — but whoever writes it needs
+to know.
+
+**Not released on the DLQ path.** A dead-lettered event is finished, and its claim is what stops
+it being picked up again.
+
+#### Proved on the live stack, with the failure created and then removed
+
+`service-inventory` on 8003 against the dev stack, events published through the **real outbox**
+(a row in `outbox.events`; the processor publishes it and uses the row id as `Nats-Msg-Id`), so
+no test-only publishing path was involved. The failure was a temporary `CHECK` constraint on
+`inventory.stock_items` naming one probe product id — a genuine handler error, not a stub.
+
+| what was done | what happened |
+|---|---|
+| publish, constraint in place | **deliveries 1, 2, 3, 4** each re-ran the handler and failed |
+| delivery 5 | **routed to the DLQ**, carrying the real `SQLSTATE 23514` error |
+| publish a second event, then **drop the constraint mid-retry** | it had failed 3 times; the next delivery **succeeded** — `Provisioned stock for new product`, row created |
+| pre-insert a claim for a fresh event, then publish it | handler **did not run**: provisioned count unchanged, no row, no retry lines |
+
+The first row is the whole fix: before it, delivery 1 was the only time the handler ever ran.
+The second row matters as much — the DLQ was **unreachable**, because `NumDelivered` could not
+climb while every redelivery was acked as a duplicate. The last row is the control: dedup still
+works, which is the property the mark-first design exists to provide.
+
+Probe rows and the temporary constraint were removed afterwards; verified 0 left.
+
+**What the proof actually exercised, stated precisely.** The dedup control was a claim **pre-inserted**
+into `events.processed` before publishing, not a success followed by a forced redelivery. That is the
+identical database state — same `(event_id, consumer_name)` primary key, same `CheckAndMark`
+`RowsAffected == 0` path — so the property is genuinely proved, but it is worth saying which route was
+taken. The other half is proved by the count: **7 deletes for 7 handler failures** means `Release` did
+**not** fire on the successful delivery, so the claim survived it.
+
+**Scope of the proof, at the right granularity.** Four consumer *services* use `IdempotencyChecker`
+(`service-customer`, `service-inventory`, `service-marketplace`, `service-notification`) and all four
+were changed — but in this codebase a "consumer" is the durable name written to
+`events.processed.consumer_name`, and there are **26** of those: inventory 7, notification 14,
+marketplace 4, customer 1. They all share one `dispatch`, so the fix covers all 26; the live run
+exercised **one** (`handleProductCreated`). So: **4 services / 26 durable consumers / 1 proved live.**
+
 ### Security — golang-jwt bumped: unauthenticated memory exhaustion via the Authorization header (NIAGA-173)
 
 - What changed in **this** repo's `go.mod`, read off the diff:
