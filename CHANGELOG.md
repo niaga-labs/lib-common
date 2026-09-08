@@ -30,7 +30,8 @@ which is strictly better than the previous behaviour where **every** handler err
 (2) `AckWait` expiring while the handler still runs: the redelivery finds the claim, acks, and
 terminates a message the first delivery is still working on — the event is lost and now leaves no
 row behind either. (3) `RouteToDLQ` itself failing, where the caller returns without acking or
-releasing and nothing redelivers. **(2) and (3) predate this change and are not fixed by it**;
+releasing and nothing redelivers — note it writes the `events.failed` row **before** terminating
+the message, so on that error the row may well exist and the event be recoverable. **(2) and (3) predate this change and are not fixed by it**;
 they are written down here because the code now invites the reader to think the claim lifecycle is
 complete.
 

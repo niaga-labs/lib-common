@@ -89,7 +89,10 @@ func (c *IdempotencyChecker) CheckAndMark(ctx context.Context, eventID, consumer
 //     DLQ, and now leaves no row behind either -- previously the stale row was at
 //     least a trace. This predates NIAGA-263 and is not fixed by it.
 //  3. RouteToDLQ itself failing. The caller returns without acking or releasing,
-//     and NumDelivered is already at MaxDeliver, so nothing redelivers.
+//     and NumDelivered is already at MaxDeliver, so nothing redelivers. It writes
+//     the events.failed row BEFORE terminating the message, so that error does not
+//     mean the row is missing -- check events.failed before calling such an event
+//     lost.
 //
 // REPLAYING FROM THE DLQ NEEDS THE CLAIM DELETED FIRST. Republishing a
 // dead-lettered event with the same Nats-Msg-Id will find the retained row, be
